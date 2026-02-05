@@ -250,36 +250,67 @@ export async function cloneChatflow(
   targetProjectId: string
 ): Promise<ChatflowRecord> {
   try {
+    console.log('🔄 cloneChatflow called:', { id, newName, sourceProjectId, targetProjectId });
+
     // Get original from source project
     const original = await getChatflow(kv, id, sourceProjectId);
     if (!original) {
-      throw new Error('Chatflow not found');
+      console.error('❌ Source chatflow not found:', { id, sourceProjectId });
+      throw new Error('Source chatflow not found');
     }
-    
-    // Create clone
+
+    console.log('✅ Found source chatflow:', {
+      name: original.name,
+      nodesCount: original.nodes?.length || 0,
+      edgesCount: original.edges?.length || 0,
+    });
+
+    // Create clone with deep-copied data to ensure complete isolation
     const cloneId = generateId();
     const now = new Date().toISOString();
-    
+
+    // Deep copy nodes, edges, variables via JSON to prevent reference sharing
+    const clonedNodes = JSON.parse(JSON.stringify(original.nodes || []));
+    const clonedEdges = JSON.parse(JSON.stringify(original.edges || []));
+    const clonedVariables = JSON.parse(JSON.stringify(original.variables || []));
+
     const cloned: ChatflowRecord = {
-      ...original,
       id: cloneId,
       name: newName || `${original.name} (Copy)`,
+      description: original.description || '',
       status: 'draft',
+      nodes: clonedNodes,
+      edges: clonedEdges,
+      variables: clonedVariables,
       createdBy: userId,
       createdAt: now,
       updatedAt: now,
-      projectId: targetProjectId, // Clone to target project
-      lastTestedAt: undefined,
-      testResults: undefined,
+      projectId: targetProjectId,
     };
-    
+
     // Save clone to target project
     const key = `chatflow:${targetProjectId}:${cloneId}`;
+    console.log('💾 Saving cloned chatflow with key:', key);
     await kv.set(key, cloned);
-    
+
+    // Verify the clone was saved successfully
+    const verified = await kv.get(key);
+    if (!verified) {
+      console.error('❌ Clone verification failed - not found after save');
+      throw new Error('Clone verification failed');
+    }
+
+    console.log('✅ Clone saved and verified:', {
+      id: cloned.id,
+      name: cloned.name,
+      projectId: cloned.projectId,
+      nodesCount: cloned.nodes.length,
+      edgesCount: cloned.edges.length,
+    });
+
     return cloned;
   } catch (error) {
-    console.error('Error cloning chatflow:', error);
+    console.error('❌ Error cloning chatflow:', error);
     throw error;
   }
 }

@@ -103,23 +103,27 @@ export function CloneChatflowModal({ open, onClose, onSuccess }: CloneChatflowMo
 
     try {
       setLoading(true);
+
+      // Step 1: Clone on backend
       const cloned = await cloneChatflow(
         selectedChatflowId,
         newName.trim(),
         selectedProject.id,
         sourceProjectId
       );
-      
-      toast.success('Chatflow cloned successfully');
-      
-      // Refresh chatflows list for current project
+
+      // Step 2: Re-fetch chatflows from backend to ensure consistency
+      // This guarantees the cloned chatflow is persisted and visible
       await fetchChatflows({ projectId: selectedProject.id });
-      
+
+      toast.success('Chatflow cloned successfully');
+
+      // Step 3: Close modal first, then trigger success callback
+      onClose();
+
       if (onSuccess) {
         onSuccess(cloned);
       }
-      
-      onClose();
     } catch (err: any) {
       console.error('Failed to clone chatflow:', err);
       toast.error(err.message || 'Failed to clone chatflow');

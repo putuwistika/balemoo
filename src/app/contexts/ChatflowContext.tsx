@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { useProject } from './ProjectContext';
 import { projectId as supabaseProjectId, publicAnonKey } from '/utils/supabase/info';
 import { Chatflow, CreateChatflowInput, UpdateChatflowInput } from '@/app/types/chatflow';
 
@@ -31,17 +32,26 @@ const ChatflowContext = createContext<ChatflowContextType | undefined>(undefined
 
 export function ChatflowProvider({ children }: { children: ReactNode }) {
   const { user, accessToken } = useAuth();
+  const { selectedProject } = useProject();
   const [chatflows, setChatflows] = useState<Chatflow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchedProjectId = useRef<string | null>(null);
 
   const baseUrl = `https://${supabaseProjectId}.supabase.co/functions/v1/make-server-deeab278`;
 
-  // Fetch chatflows from backend
-  const fetchChatflows = async (filters?: { status?: string; projectId?: string }) => {
+  // Fetch chatflows from backend - projectId is REQUIRED
+  const fetchChatflows = useCallback(async (filters?: { status?: string; projectId?: string }) => {
     if (!user || !accessToken || user.role !== 'admin') {
       setChatflows([]);
       return;
+    }
+
+    // projectId is required by the backend - use filter, fallback to selectedProject
+    const projectId = filters?.projectId || selectedProject?.id;
+    if (!projectId) {
+      console.warn('fetchChatflows: No projectId available, skipping fetch');
+      return; // Don't clear existing data, just skip
     }
 
     try {
@@ -49,8 +59,8 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       const params = new URLSearchParams();
+      params.append('projectId', projectId);
       if (filters?.status) params.append('status', filters.status);
-      if (filters?.projectId) params.append('projectId', filters.projectId);
 
       const response = await fetch(`${baseUrl}/chatflows?${params.toString()}`, {
         method: 'GET',
@@ -68,14 +78,15 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       setChatflows(data.chatflows || []);
+      lastFetchedProjectId.current = projectId;
     } catch (err: any) {
       console.error('Error fetching chatflows:', err);
       setError(err.message || 'Failed to fetch chatflows');
-      setChatflows([]);
+      // Don't clear existing chatflows on error - keep stale data visible
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, accessToken, selectedProject?.id, baseUrl]);
 
   // Get single chatflow by ID
   const getChatflowById = async (id: string, projectId: string): Promise<Chatflow | null> => {
@@ -279,10 +290,10 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
           'X-User-Token': accessToken,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          newName, 
+        body: JSON.stringify({
+          newName,
           targetProjectId,
-          sourceProjectId: sourceProjectId || targetProjectId 
+          sourceProjectId: sourceProjectId || targetProjectId
         }),
       });
 
@@ -294,8 +305,16 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const clonedChatflow = data.chatflow;
 
-      // Add to local state
-      setChatflows((prev) => [clonedChatflow, ...prev]);
+      // If clone target is current project, add to local state immediately for instant UI feedback
+      // Then re-fetch from backend to ensure consistency
+      if (targetProjectId === selectedProject?.id || targetProjectId === lastFetchedProjectId.current) {
+        setChatflows((prev) => {
+          // Avoid duplicates if fetchChatflows runs concurrently
+          const exists = prev.some(cf => cf.id === clonedChatflow.id);
+          if (exists) return prev;
+          return [clonedChatflow, ...prev];
+        });
+      }
 
       return clonedChatflow;
     } catch (err: any) {
@@ -367,12 +386,20 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initial fetch on mount
+  // Fetch chatflows when user is ready AND a project is selected
+  // Re-fetch when selectedProject changes to maintain project isolation
   useEffect(() => {
-    if (user && user.role === 'admin') {
-      fetchChatflows();
+    if (user && user.role === 'admin' && selectedProject?.id) {
+      // Only fetch if project actually changed (avoid redundant fetches)
+      if (lastFetchedProjectId.current !== selectedProject.id) {
+        fetchChatflows({ projectId: selectedProject.id });
+      }
+    } else if (!selectedProject?.id) {
+      // No project selected - clear chatflows
+      setChatflows([]);
+      lastFetchedProjectId.current = null;
     }
-  }, [user]);
+  }, [user, selectedProject?.id, fetchChatflows]);
 
   const value: ChatflowContextType = {
     chatflows,

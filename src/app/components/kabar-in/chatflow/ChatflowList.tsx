@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Plus, Search, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -10,11 +10,19 @@ import { toast } from "sonner";
 
 export function ChatflowList() {
   const navigate = useNavigate();
-  const { chatflows, createChatflow, deleteChatflow, loading } = useChatflows();
+  const { chatflows, createChatflow, deleteChatflow, fetchChatflows, loading } = useChatflows();
   const { selectedProject } = useProject();
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
+
+  // Fetch chatflows for the current project on mount and when project changes
+  useEffect(() => {
+    if (selectedProject?.id) {
+      fetchChatflows({ projectId: selectedProject.id });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id]);
 
   const handleCreateChatflow = async () => {
     if (!selectedProject) {
@@ -52,9 +60,15 @@ export function ChatflowList() {
     }
   };
 
-  const filteredChatflows = chatflows.filter((cf) =>
-    cf.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter chatflows: only show current project's chatflows + search filter
+  const filteredChatflows = chatflows.filter((cf) => {
+    // Project isolation: only show chatflows belonging to the selected project
+    if (selectedProject?.id && cf.projectId && cf.projectId !== selectedProject.id) {
+      return false;
+    }
+    // Search filter
+    return cf.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <div
