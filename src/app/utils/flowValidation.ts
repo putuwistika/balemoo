@@ -322,36 +322,6 @@ export function validateNavigation(screens: FlowScreen[]): ValidationError[] {
 }
 
 /**
- * Generates a unique screen ID
- */
-export function generateScreenId(existingIds: string[], baseName: string = 'SCREEN'): string {
-    let counter = 1;
-    let id = baseName;
-
-    while (existingIds.includes(id)) {
-        id = `${baseName}_${counter}`;
-        counter++;
-    }
-
-    return id;
-}
-
-/**
- * Generates a unique component name
- */
-export function generateComponentName(existingNames: string[], baseName: string = 'field'): string {
-    let counter = 1;
-    let name = baseName;
-
-    while (existingNames.includes(name)) {
-        name = `${baseName}_${counter}`;
-        counter++;
-    }
-
-    return name;
-}
-
-/**
  * Checks if a screen is reachable from the first screen
  */
 export function isScreenReachable(

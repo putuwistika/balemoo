@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useWhatsAppFlows } from '@/app/contexts/WhatsAppFlowContext';
+import { useProject } from '@/app/contexts/ProjectContext';
 import type { WhatsAppFlow, FlowCategory } from '@/app/types/whatsappFlow';
 import { Plus, Search, Filter, Edit2, Copy, Trash2, Eye, FileJson } from 'lucide-react';
 
 export function FlowList() {
     const navigate = useNavigate();
-    const { projectId } = useParams<{ projectId: string }>();
+    const { selectedProject } = useProject();
     const {
         flows,
         templates,
@@ -38,7 +39,7 @@ export function FlowList() {
     const handleCreateBlankFlow = async () => {
         try {
             const newFlow = await createFlow('New Flow', 'OTHER', 'Description');
-            navigate(`/kabar-in/${projectId}/whatsapp-flows/${newFlow.id}`);
+            navigate(`/kabar-in/whatsapp-flows/${newFlow.id}`);
         } catch (err) {
             console.error('Failed to create flow:', err);
         }
@@ -48,7 +49,7 @@ export function FlowList() {
         try {
             const newFlow = await createFlowFromTemplate(templateId, `${templateName} - Copy`);
             setShowTemplateModal(false);
-            navigate(`/kabar-in/${projectId}/whatsapp-flows/${newFlow.id}`);
+            navigate(`/kabar-in/whatsapp-flows/${newFlow.id}`);
         } catch (err) {
             console.error('Failed to create flow from template:', err);
         }
@@ -57,7 +58,7 @@ export function FlowList() {
     const handleCloneFlow = async (flow: WhatsAppFlow) => {
         try {
             const clonedFlow = await cloneFlow(flow.id, `${flow.name} - Copy`);
-            navigate(`/kabar-in/${projectId}/whatsapp-flows/${clonedFlow.id}`);
+            navigate(`/kabar-in/whatsapp-flows/${clonedFlow.id}`);
         } catch (err) {
             console.error('Failed to clone flow:', err);
         }
@@ -160,7 +161,7 @@ export function FlowList() {
                                 className="bg-white rounded-lg border border-gray-200 hover:shadow-lg transition-shadow cursor-pointer"
                             >
                                 <div
-                                    onClick={() => navigate(`/kabar-in/${projectId}/whatsapp-flows/${flow.id}`)}
+                                    onClick={() => navigate(`/kabar-in/whatsapp-flows/${flow.id}`)}
                                     className="p-6"
                                 >
                                     <div className="flex items-start justify-between mb-3">
@@ -193,7 +194,7 @@ export function FlowList() {
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            navigate(`/kabar-in/${projectId}/whatsapp-flows/${flow.id}`);
+                                            navigate(`/kabar-in/whatsapp-flows/${flow.id}`);
                                         }}
                                         className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                         title="Edit"

@@ -9,7 +9,7 @@ import { exportFlowJSON, importFlowJSON } from '@/app/utils/flowHelpers';
 import { Save, Check, AlertCircle, Eye, Download, Upload, ArrowLeft } from 'lucide-react';
 
 export function FlowStudio() {
-    const { projectId, flowId } = useParams<{ projectId: string; flowId: string }>();
+    const { flowId } = useParams<{ flowId: string }>();
     const navigate = useNavigate();
     const {
         currentFlow,
@@ -113,7 +113,7 @@ export function FlowStudio() {
             <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => navigate(`/kabar-in/${projectId}/whatsapp-flows`)}
+                        onClick={() => navigate(`/kabar-in/whatsapp-flows`)}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
                     >
                         <ArrowLeft size={20} />

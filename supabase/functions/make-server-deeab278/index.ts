@@ -10,6 +10,7 @@ import * as executionHelpers from "./execution_helpers.ts";
 import * as reminderHelpers from "./reminder_helpers.ts";
 import * as sessionHelpers from "./session_helpers.ts";
 import * as guestHelpers from "./guest_helpers.ts";
+import * as waFlowHelpers from "./whatsapp_flow_helpers.ts";
 
 const app = new Hono();
 
@@ -2701,6 +2702,291 @@ app.post("/make-server-deeab278/reminders/:id/trigger", async (c) => {
     console.error('Error triggering reminder:', error);
     const message = error instanceof Error ? error.message : 'Failed to trigger reminder';
     return c.json({ error: message }, 400);
+  }
+});
+
+// ==================== WhatsApp Flow Endpoints ====================
+
+// List all WhatsApp flows (admin only) - projectId required
+app.get("/make-server-deeab278/wa-flows", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can access WhatsApp flows' }, 403);
+    }
+
+    const status = c.req.query('status');
+    const projectId = c.req.query('projectId');
+
+    if (!projectId) {
+      return c.json({ error: 'Project ID is required' }, 400);
+    }
+
+    const flows = await waFlowHelpers.listFlows(kv, { status: status || undefined, projectId });
+    return c.json({ flows });
+  } catch (error) {
+    console.error('Error listing WhatsApp flows:', error);
+    return c.json({ error: 'Failed to list WhatsApp flows' }, 500);
+  }
+});
+
+// Get single WhatsApp flow (admin only)
+app.get("/make-server-deeab278/wa-flows/:id", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can access WhatsApp flows' }, 403);
+    }
+
+    const flowId = c.req.param('id');
+    const projectId = c.req.query('projectId');
+
+    if (!projectId) {
+      return c.json({ error: 'Project ID is required' }, 400);
+    }
+
+    const flow = await waFlowHelpers.getFlow(kv, flowId, projectId);
+    if (!flow) {
+      return c.json({ error: 'WhatsApp flow not found' }, 404);
+    }
+
+    return c.json({ flow });
+  } catch (error) {
+    console.error('Error getting WhatsApp flow:', error);
+    return c.json({ error: 'Failed to get WhatsApp flow' }, 500);
+  }
+});
+
+// Create new WhatsApp flow (admin only)
+app.post("/make-server-deeab278/wa-flows", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can create WhatsApp flows' }, 403);
+    }
+
+    const body = await c.req.json();
+    const { name, description, category, projectId, flowJson } = body;
+
+    if (!name) {
+      return c.json({ error: 'Flow name is required' }, 400);
+    }
+
+    if (!projectId) {
+      return c.json({ error: 'Project ID is required' }, 400);
+    }
+
+    const flow = await waFlowHelpers.createFlow(
+      kv,
+      { name, description, category, projectId, flowJson },
+      user.id
+    );
+
+    return c.json({ flow, message: 'WhatsApp flow created successfully' });
+  } catch (error) {
+    console.error('Error creating WhatsApp flow:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create WhatsApp flow';
+    return c.json({ error: message }, 400);
+  }
+});
+
+// Create WhatsApp flow from template (admin only)
+app.post("/make-server-deeab278/wa-flows/from-template", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can create WhatsApp flows' }, 403);
+    }
+
+    const body = await c.req.json();
+    const { templateId, name, projectId } = body;
+
+    if (!templateId || !name || !projectId) {
+      return c.json({ error: 'templateId, name, and projectId are required' }, 400);
+    }
+
+    const flow = await waFlowHelpers.createFlowFromTemplate(
+      kv,
+      templateId,
+      name,
+      projectId,
+      user.id
+    );
+
+    return c.json({ flow, message: 'WhatsApp flow created from template' });
+  } catch (error) {
+    console.error('Error creating WhatsApp flow from template:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create flow from template';
+    return c.json({ error: message }, 400);
+  }
+});
+
+// Update WhatsApp flow (admin only)
+app.put("/make-server-deeab278/wa-flows/:id", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can update WhatsApp flows' }, 403);
+    }
+
+    const flowId = c.req.param('id');
+    const projectId = c.req.query('projectId');
+    const body = await c.req.json();
+
+    if (!projectId) {
+      return c.json({ error: 'Project ID is required' }, 400);
+    }
+
+    const flow = await waFlowHelpers.updateFlow(kv, flowId, body, projectId);
+    return c.json({ flow, message: 'WhatsApp flow updated successfully' });
+  } catch (error) {
+    console.error('Error updating WhatsApp flow:', error);
+    const message = error instanceof Error ? error.message : 'Failed to update WhatsApp flow';
+    return c.json({ error: message }, 400);
+  }
+});
+
+// Delete WhatsApp flow (admin only)
+app.delete("/make-server-deeab278/wa-flows/:id", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can delete WhatsApp flows' }, 403);
+    }
+
+    const flowId = c.req.param('id');
+    const projectId = c.req.query('projectId');
+
+    if (!projectId) {
+      return c.json({ error: 'Project ID is required' }, 400);
+    }
+
+    await waFlowHelpers.deleteFlow(kv, flowId, projectId);
+    return c.json({ message: 'WhatsApp flow deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting WhatsApp flow:', error);
+    const message = error instanceof Error ? error.message : 'Failed to delete WhatsApp flow';
+    return c.json({ error: message }, 400);
+  }
+});
+
+// Clone WhatsApp flow (admin only)
+app.post("/make-server-deeab278/wa-flows/:id/clone", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Only admins can clone WhatsApp flows' }, 403);
+    }
+
+    const flowId = c.req.param('id');
+    const body = await c.req.json();
+    const { newName, sourceProjectId, targetProjectId } = body;
+
+    if (!sourceProjectId || !targetProjectId) {
+      return c.json({ error: 'sourceProjectId and targetProjectId are required' }, 400);
+    }
+
+    const flow = await waFlowHelpers.cloneFlow(
+      kv,
+      flowId,
+      newName,
+      user.id,
+      sourceProjectId,
+      targetProjectId
+    );
+
+    return c.json({ flow, message: 'WhatsApp flow cloned successfully' });
+  } catch (error) {
+    console.error('Error cloning WhatsApp flow:', error);
+    const message = error instanceof Error ? error.message : 'Failed to clone WhatsApp flow';
+    return c.json({ error: message }, 400);
+  }
+});
+
+// List WhatsApp flow templates
+app.get("/make-server-deeab278/wa-flow-templates", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c);
+    if (!accessToken) {
+      return c.json({ error: 'No authorization token provided' }, 401);
+    }
+
+    const { user, error } = await verifyUser(accessToken);
+    if (error || !user) {
+      return c.json({ error }, 401);
+    }
+
+    // Seed templates if needed
+    await waFlowHelpers.seedDefaultTemplates(kv);
+
+    const templates = await waFlowHelpers.listTemplates(kv);
+    return c.json({ templates });
+  } catch (error) {
+    console.error('Error listing WhatsApp flow templates:', error);
+    return c.json({ error: 'Failed to list templates' }, 500);
   }
 });
 

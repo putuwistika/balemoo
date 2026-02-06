@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useProject } from './ProjectContext';
-import { createClient } from '@supabase/supabase-js';
-import { projectId as supabaseProjectId, publicAnonKey } from '@/utils/supabase/info';
+import { projectId as supabaseProjectId, publicAnonKey } from '/utils/supabase/info';
 import type {
     WhatsAppFlow,
     WhatsAppFlowTemplate,
@@ -12,13 +11,39 @@ import type {
     FlowCategory,
 } from '@/app/types/whatsappFlow';
 import { validateFlowJSON, type ValidationResult } from '@/app/utils/flowValidation';
-import { cloneFlow as cloneFlowHelper, syncScreenData } from '@/app/utils/flowHelpers';
+import { syncScreenData } from '@/app/utils/flowHelpers';
 
-// Initialize Supabase client
-const supabase = createClient(
-    `https://${supabaseProjectId}.supabase.co`,
-    publicAnonKey
-);
+// Map backend record to frontend WhatsAppFlow type
+function mapFlowFromBackend(record: any): WhatsAppFlow {
+    return {
+        id: record.id,
+        project_id: record.projectId,
+        name: record.name,
+        description: record.description,
+        category: record.category,
+        status: record.status,
+        flow_json: record.flowJson,
+        version: record.version,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+        created_by: record.createdBy,
+        published_at: record.publishedAt,
+    };
+}
+
+// Map backend template to frontend WhatsAppFlowTemplate type
+function mapTemplateFromBackend(record: any): WhatsAppFlowTemplate {
+    return {
+        id: record.id,
+        name: record.name,
+        description: record.description,
+        category: record.category,
+        thumbnail_url: record.thumbnailUrl,
+        flow_json: record.flowJson,
+        is_public: record.isPublic,
+        created_at: record.createdAt,
+    };
+}
 
 interface WhatsAppFlowContextType {
     flows: WhatsAppFlow[];
@@ -81,12 +106,23 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
     const [error, setError] = useState<string | null>(null);
     const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
-    // Auto-save timer
-    const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+    // Auto-save timer ref (useRef to avoid re-renders)
+    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Ref to latest currentFlow for auto-save
+    const currentFlowRef = useRef<WhatsAppFlow | null>(null);
+    currentFlowRef.current = currentFlow;
+
+    const baseUrl = `https://${supabaseProjectId}.supabase.co/functions/v1/make-server-deeab278`;
+
+    const getHeaders = useCallback(() => ({
+        'Authorization': `Bearer ${publicAnonKey}`,
+        'X-User-Token': accessToken || '',
+        'Content-Type': 'application/json',
+    }), [accessToken]);
 
     // Fetch flows for current project
     const fetchFlows = useCallback(async () => {
-        if (!user || !selectedProject?.id) {
+        if (!user || !accessToken || !selectedProject?.id) {
             setFlows([]);
             return;
         }
@@ -95,15 +131,22 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             setLoading(true);
             setError(null);
 
-            const { data, error: fetchError } = await supabase
-                .from('whatsapp_flows')
-                .select('*')
-                .eq('project_id', selectedProject.id)
-                .order('updated_at', { ascending: false });
+            const response = await fetch(
+                `${baseUrl}/wa-flows?projectId=${encodeURIComponent(selectedProject.id)}`,
+                {
+                    method: 'GET',
+                    headers: getHeaders(),
+                }
+            );
 
-            if (fetchError) throw fetchError;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch flows');
+            }
 
-            setFlows(data || []);
+            const data = await response.json();
+            const mappedFlows = (data.flows || []).map(mapFlowFromBackend);
+            setFlows(mappedFlows);
         } catch (err: any) {
             console.error('Error fetching flows:', err);
             setError(err.message || 'Failed to fetch flows');
@@ -111,23 +154,28 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
         } finally {
             setLoading(false);
         }
-    }, [user, selectedProject]);
+    }, [user, accessToken, selectedProject, baseUrl, getHeaders]);
 
     // Get flow by ID
     const getFlowById = async (id: string): Promise<WhatsAppFlow | null> => {
-        if (!user || !selectedProject?.id) return null;
+        if (!user || !accessToken || !selectedProject?.id) return null;
 
         try {
-            const { data, error: fetchError } = await supabase
-                .from('whatsapp_flows')
-                .select('*')
-                .eq('id', id)
-                .eq('project_id', selectedProject.id)
-                .single();
+            const response = await fetch(
+                `${baseUrl}/wa-flows/${id}?projectId=${encodeURIComponent(selectedProject.id)}`,
+                {
+                    method: 'GET',
+                    headers: getHeaders(),
+                }
+            );
 
-            if (fetchError) throw fetchError;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch flow');
+            }
 
-            return data;
+            const data = await response.json();
+            return data.flow ? mapFlowFromBackend(data.flow) : null;
         } catch (err: any) {
             console.error('Error fetching flow:', err);
             return null;
@@ -140,35 +188,31 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
         category: FlowCategory,
         description?: string
     ): Promise<WhatsAppFlow> => {
-        if (!user || !selectedProject?.id) {
+        if (!user || !accessToken || !selectedProject?.id) {
             throw new Error('Unauthorized or no project selected');
         }
 
         try {
-            const newFlow: Partial<WhatsAppFlow> = {
-                project_id: selectedProject.id,
-                name,
-                description,
-                category,
-                status: 'draft',
-                version: '5.0',
-                flow_json: {
-                    version: '5.0',
-                    screens: [],
-                },
-                created_by: user.id,
-            };
+            const response = await fetch(`${baseUrl}/wa-flows`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    name,
+                    description,
+                    category,
+                    projectId: selectedProject.id,
+                }),
+            });
 
-            const { data, error: createError } = await supabase
-                .from('whatsapp_flows')
-                .insert([newFlow])
-                .select()
-                .single();
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create flow');
+            }
 
-            if (createError) throw createError;
-
-            setFlows((prev) => [data, ...prev]);
-            return data;
+            const data = await response.json();
+            const newFlow = mapFlowFromBackend(data.flow);
+            setFlows((prev) => [newFlow, ...prev]);
+            return newFlow;
         } catch (err: any) {
             console.error('Error creating flow:', err);
             throw err;
@@ -180,42 +224,30 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
         templateId: string,
         name: string
     ): Promise<WhatsAppFlow> => {
-        if (!user || !selectedProject?.id) {
+        if (!user || !accessToken || !selectedProject?.id) {
             throw new Error('Unauthorized or no project selected');
         }
 
         try {
-            // Fetch template
-            const { data: template, error: templateError } = await supabase
-                .from('whatsapp_flow_templates')
-                .select('*')
-                .eq('id', templateId)
-                .single();
+            const response = await fetch(`${baseUrl}/wa-flows/from-template`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    templateId,
+                    name,
+                    projectId: selectedProject.id,
+                }),
+            });
 
-            if (templateError) throw templateError;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create flow from template');
+            }
 
-            // Create flow from template
-            const newFlow: Partial<WhatsAppFlow> = {
-                project_id: selectedProject.id,
-                name,
-                description: template.description,
-                category: template.category,
-                status: 'draft',
-                version: '5.0',
-                flow_json: template.flow_json,
-                created_by: user.id,
-            };
-
-            const { data, error: createError } = await supabase
-                .from('whatsapp_flows')
-                .insert([newFlow])
-                .select()
-                .single();
-
-            if (createError) throw createError;
-
-            setFlows((prev) => [data, ...prev]);
-            return data;
+            const data = await response.json();
+            const newFlow = mapFlowFromBackend(data.flow);
+            setFlows((prev) => [newFlow, ...prev]);
+            return newFlow;
         } catch (err: any) {
             console.error('Error creating flow from template:', err);
             throw err;
@@ -227,29 +259,43 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
         id: string,
         updates: Partial<WhatsAppFlow>
     ): Promise<WhatsAppFlow> => {
-        if (!user || !selectedProject?.id) {
+        if (!user || !accessToken || !selectedProject?.id) {
             throw new Error('Unauthorized or no project selected');
         }
 
         try {
-            const { data, error: updateError } = await supabase
-                .from('whatsapp_flows')
-                .update(updates)
-                .eq('id', id)
-                .eq('project_id', selectedProject.id)
-                .select()
-                .single();
+            // Map frontend field names to backend field names
+            const backendUpdates: any = {};
+            if (updates.name !== undefined) backendUpdates.name = updates.name;
+            if (updates.description !== undefined) backendUpdates.description = updates.description;
+            if (updates.category !== undefined) backendUpdates.category = updates.category;
+            if (updates.status !== undefined) backendUpdates.status = updates.status;
+            if (updates.flow_json !== undefined) backendUpdates.flowJson = updates.flow_json;
 
-            if (updateError) throw updateError;
+            const response = await fetch(
+                `${baseUrl}/wa-flows/${id}?projectId=${encodeURIComponent(selectedProject.id)}`,
+                {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify(backendUpdates),
+                }
+            );
 
-            setFlows((prev) => prev.map((f) => (f.id === id ? data : f)));
-
-            // Update current flow if it's the one being updated
-            if (currentFlow?.id === id) {
-                setCurrentFlowState(data);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update flow');
             }
 
-            return data;
+            const data = await response.json();
+            const updatedFlow = mapFlowFromBackend(data.flow);
+
+            setFlows((prev) => prev.map((f) => (f.id === id ? updatedFlow : f)));
+
+            if (currentFlowRef.current?.id === id) {
+                setCurrentFlowState(updatedFlow);
+            }
+
+            return updatedFlow;
         } catch (err: any) {
             console.error('Error updating flow:', err);
             throw err;
@@ -258,18 +304,23 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
 
     // Delete flow
     const deleteFlow = async (id: string): Promise<void> => {
-        if (!user || !selectedProject?.id) {
+        if (!user || !accessToken || !selectedProject?.id) {
             throw new Error('Unauthorized or no project selected');
         }
 
         try {
-            const { error: deleteError } = await supabase
-                .from('whatsapp_flows')
-                .delete()
-                .eq('id', id)
-                .eq('project_id', selectedProject.id);
+            const response = await fetch(
+                `${baseUrl}/wa-flows/${id}?projectId=${encodeURIComponent(selectedProject.id)}`,
+                {
+                    method: 'DELETE',
+                    headers: getHeaders(),
+                }
+            );
 
-            if (deleteError) throw deleteError;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to delete flow');
+            }
 
             setFlows((prev) => prev.filter((f) => f.id !== id));
 
@@ -284,32 +335,30 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
 
     // Clone flow
     const cloneFlow = async (id: string, newName: string): Promise<WhatsAppFlow> => {
-        if (!user || !selectedProject?.id) {
+        if (!user || !accessToken || !selectedProject?.id) {
             throw new Error('Unauthorized or no project selected');
         }
 
         try {
-            const original = await getFlowById(id);
-            if (!original) throw new Error('Flow not found');
+            const response = await fetch(`${baseUrl}/wa-flows/${id}/clone`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    newName,
+                    sourceProjectId: selectedProject.id,
+                    targetProjectId: selectedProject.id,
+                }),
+            });
 
-            const cloned = cloneFlowHelper(original, newName);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to clone flow');
+            }
 
-            const newFlow: Partial<WhatsAppFlow> = {
-                ...cloned,
-                project_id: selectedProject.id,
-                created_by: user.id,
-            };
-
-            const { data, error: createError } = await supabase
-                .from('whatsapp_flows')
-                .insert([newFlow])
-                .select()
-                .single();
-
-            if (createError) throw createError;
-
-            setFlows((prev) => [data, ...prev]);
-            return data;
+            const data = await response.json();
+            const clonedFlow = mapFlowFromBackend(data.flow);
+            setFlows((prev) => [clonedFlow, ...prev]);
+            return clonedFlow;
         } catch (err: any) {
             console.error('Error cloning flow:', err);
             throw err;
@@ -317,21 +366,27 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
     };
 
     // Fetch templates
-    const fetchTemplates = async () => {
+    const fetchTemplates = useCallback(async () => {
+        if (!user || !accessToken) return;
+
         try {
-            const { data, error: fetchError } = await supabase
-                .from('whatsapp_flow_templates')
-                .select('*')
-                .eq('is_public', true)
-                .order('created_at', { ascending: false });
+            const response = await fetch(`${baseUrl}/wa-flow-templates`, {
+                method: 'GET',
+                headers: getHeaders(),
+            });
 
-            if (fetchError) throw fetchError;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch templates');
+            }
 
-            setTemplates(data || []);
+            const data = await response.json();
+            const mappedTemplates = (data.templates || []).map(mapTemplateFromBackend);
+            setTemplates(mappedTemplates);
         } catch (err: any) {
             console.error('Error fetching templates:', err);
         }
-    };
+    }, [user, accessToken, baseUrl, getHeaders]);
 
     // Set current flow
     const setCurrentFlow = (flow: WhatsAppFlow | null) => {
@@ -363,7 +418,6 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             flow_json: updatedFlowJSON,
         });
 
-        // Trigger auto-save
         triggerAutoSave();
     };
 
@@ -385,12 +439,10 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             flow_json: updatedFlowJSON,
         });
 
-        // Update selected screen if it's the one being updated
         if (selectedScreen?.id === screenId) {
             setSelectedScreen({ ...selectedScreen, ...updates });
         }
 
-        // Trigger auto-save
         triggerAutoSave();
     };
 
@@ -410,12 +462,10 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             flow_json: updatedFlowJSON,
         });
 
-        // Clear selection if deleted screen was selected
         if (selectedScreen?.id === screenId) {
             setSelectedScreen(updatedScreens[0] || null);
         }
 
-        // Trigger auto-save
         triggerAutoSave();
     };
 
@@ -433,7 +483,6 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             flow_json: updatedFlowJSON,
         });
 
-        // Trigger auto-save
         triggerAutoSave();
     };
 
@@ -457,9 +506,7 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             },
         };
 
-        // Sync screen data with components
         const syncedScreen = syncScreenData(updatedScreen);
-
         updateScreen(selectedScreen.id, syncedScreen);
     };
 
@@ -479,12 +526,9 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             },
         };
 
-        // Sync screen data with components
         const syncedScreen = syncScreenData(updatedScreen);
-
         updateScreen(selectedScreen.id, syncedScreen);
 
-        // Update selected component
         if (selectedComponentIndex === index) {
             setSelectedComponent({ ...selectedComponent!, ...updates });
         }
@@ -504,12 +548,9 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
             },
         };
 
-        // Sync screen data with components
         const syncedScreen = syncScreenData(updatedScreen);
-
         updateScreen(selectedScreen.id, syncedScreen);
 
-        // Clear selection if deleted component was selected
         if (selectedComponentIndex === index) {
             setSelectedComponent(null);
             setSelectedComponentIndex(null);
@@ -548,24 +589,24 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
 
     // Auto-save trigger
     const triggerAutoSave = () => {
-        if (autoSaveTimer) {
-            clearTimeout(autoSaveTimer);
+        if (autoSaveTimerRef.current) {
+            clearTimeout(autoSaveTimerRef.current);
         }
 
-        const timer = setTimeout(() => {
+        autoSaveTimerRef.current = setTimeout(() => {
             saveCurrentFlow();
-        }, 2000); // 2 seconds debounce
-
-        setAutoSaveTimer(timer);
+        }, 2000);
     };
 
     // Save current flow
     const saveCurrentFlow = async () => {
-        if (!currentFlow) return;
+        const flow = currentFlowRef.current;
+        if (!flow) return;
 
         try {
-            await updateFlow(currentFlow.id, {
-                flow_json: currentFlow.flow_json,
+            await updateFlow(flow.id, {
+                flow_json: flow.flow_json,
+                name: flow.name,
             });
         } catch (err: any) {
             console.error('Auto-save failed:', err);
@@ -574,23 +615,23 @@ export function WhatsAppFlowProvider({ children }: { children: ReactNode }) {
 
     // Fetch flows on mount and when project changes
     useEffect(() => {
-        if (user && selectedProject?.id) {
+        if (user && accessToken && selectedProject?.id) {
             fetchFlows();
             fetchTemplates();
         } else {
             setFlows([]);
             setTemplates([]);
         }
-    }, [user, selectedProject, fetchFlows]);
+    }, [user, accessToken, selectedProject, fetchFlows, fetchTemplates]);
 
     // Cleanup auto-save timer
     useEffect(() => {
         return () => {
-            if (autoSaveTimer) {
-                clearTimeout(autoSaveTimer);
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
             }
         };
-    }, [autoSaveTimer]);
+    }, []);
 
     const value: WhatsAppFlowContextType = {
         flows,

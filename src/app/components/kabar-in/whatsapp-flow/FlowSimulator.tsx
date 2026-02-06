@@ -99,14 +99,17 @@ export function FlowSimulator({ onClose }: FlowSimulatorProps) {
                     <button
                         key={index}
                         onClick={() => {
-                            if (component['on-click-action']?.name === 'navigate') {
+                            const actionName = component['on-click-action']?.name;
+                            if (actionName === 'navigate') {
                                 const nextScreenId = component['on-click-action'].next?.name;
                                 const nextIndex = currentFlow.flow_json.screens.findIndex(s => s.id === nextScreenId);
                                 if (nextIndex !== -1) {
                                     setCurrentScreenIndex(nextIndex);
                                 }
-                            } else if (component['on-click-action']?.name === 'complete') {
+                            } else if (actionName === 'complete') {
                                 alert('Flow completed! Data: ' + JSON.stringify(formData, null, 2));
+                            } else if (actionName === 'data_exchange') {
+                                alert('Data Exchange: Server would process this request.\nPayload: ' + JSON.stringify({ ...formData, ...(component['on-click-action'].payload || {}) }, null, 2));
                             }
                         }}
                         className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
