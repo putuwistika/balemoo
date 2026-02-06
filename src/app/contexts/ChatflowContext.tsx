@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { useProject } from './ProjectContext';
 import { projectId as supabaseProjectId, publicAnonKey } from '/utils/supabase/info';
 import { Chatflow, CreateChatflowInput, UpdateChatflowInput } from '@/app/types/chatflow';
 
@@ -31,6 +32,7 @@ const ChatflowContext = createContext<ChatflowContextType | undefined>(undefined
 
 export function ChatflowProvider({ children }: { children: ReactNode }) {
   const { user, accessToken } = useAuth();
+  const { selectedProject } = useProject();
   const [chatflows, setChatflows] = useState<Chatflow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       console.log('✅ getChatflowById raw response:', data);
       console.log('✅ getChatflowById chatflow.nodes:', data.chatflow?.nodes);
-      
+
       if (data.chatflow?.nodes) {
         console.log('✅ Nodes in response:');
         data.chatflow.nodes.forEach((node: any, idx: number) => {
@@ -123,7 +125,7 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
           });
         });
       }
-      
+
       return data.chatflow;
     } catch (err: any) {
       console.error('❌ Error fetching chatflow:', err);
@@ -211,7 +213,7 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       const updatedChatflow = data.chatflow;
-      
+
       console.log('✅ Updated chatflow from backend:', updatedChatflow);
       console.log('✅ Saved nodes count:', updatedChatflow.nodes?.length);
       console.log('✅ Saved nodes with config:', updatedChatflow.nodes?.filter((n: any) => n.data.config).length);
@@ -279,10 +281,10 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
           'X-User-Token': accessToken,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          newName, 
+        body: JSON.stringify({
+          newName,
           targetProjectId,
-          sourceProjectId: sourceProjectId || targetProjectId 
+          sourceProjectId: sourceProjectId || targetProjectId
         }),
       });
 
@@ -294,8 +296,9 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const clonedChatflow = data.chatflow;
 
-      // Add to local state
-      setChatflows((prev) => [clonedChatflow, ...prev]);
+      // ✅ FIX: Refresh chatflows list from backend for the target project
+      // This ensures the cloned chatflow persists even after page refresh or project switch
+      await fetchChatflows({ projectId: targetProjectId });
 
       return clonedChatflow;
     } catch (err: any) {
@@ -367,12 +370,16 @@ export function ChatflowProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initial fetch on mount
+
+  // Initial fetch on mount and when project changes
   useEffect(() => {
-    if (user && user.role === 'admin') {
-      fetchChatflows();
+    if (user && user.role === 'admin' && selectedProject?.id) {
+      fetchChatflows({ projectId: selectedProject.id });
+    } else if (user && user.role === 'admin') {
+      // If no project selected, clear chatflows
+      setChatflows([]);
     }
-  }, [user]);
+  }, [user, selectedProject]);
 
   const value: ChatflowContextType = {
     chatflows,

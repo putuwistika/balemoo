@@ -65,6 +65,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   // Wrapper for setSelectedProject to auto-select first agenda
   const setSelectedProject = (project: Project | null) => {
     setSelectedProjectState(project);
+
+    // Persist selected project to localStorage
+    if (project) {
+      localStorage.setItem('balemoo_selected_project_id', project.id);
+    } else {
+      localStorage.removeItem('balemoo_selected_project_id');
+    }
+
     if (project && project.agendas && project.agendas.length > 0) {
       setSelectedAgenda(project.agendas[0]);
     } else {
@@ -103,12 +111,22 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const fetchedProjects = data.projects || [];
       setProjects(fetchedProjects);
-      
-      // Update selectedProject if it exists in the fetched projects
-      if (selectedProject) {
+
+      // Restore selectedProject from localStorage if available
+      const savedProjectId = localStorage.getItem('balemoo_selected_project_id');
+      if (savedProjectId) {
+        const savedProject = fetchedProjects.find((p: Project) => p.id === savedProjectId);
+        if (savedProject) {
+          setSelectedProjectState(savedProject);
+          if (savedProject.agendas && savedProject.agendas.length > 0) {
+            setSelectedAgenda(savedProject.agendas[0]);
+          }
+        }
+      } else if (selectedProject) {
+        // Update selectedProject if it exists in the fetched projects
         const updatedSelectedProject = fetchedProjects.find((p: Project) => p.id === selectedProject.id);
         if (updatedSelectedProject) {
-          setSelectedProject(updatedSelectedProject);
+          setSelectedProjectState(updatedSelectedProject);
         }
       }
     } catch (err: any) {
@@ -156,10 +174,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      
+
       // Refresh projects list
       await fetchProjects();
-      
+
       return data.project;
     } catch (err: any) {
       console.error('Error creating project:', err);
@@ -177,7 +195,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       console.log('=== UPDATE PROJECT REQUEST (Frontend) ===');
       console.log('Project ID:', projectIdParam);
       console.log('Updates:', JSON.stringify(updates, null, 2));
-      
+
       const response = await fetch(
         `https://${supabaseProjectId}.supabase.co/functions/v1/make-server-deeab278/projects/${projectIdParam}`,
         {
@@ -192,7 +210,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       );
 
       console.log('Response status:', response.status);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error response:', errorData);
@@ -266,17 +284,17 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   const isProjectAccessible = (project: Project) => {
     if (!user) return false;
-    
+
     // Admin can access all projects
     if (user.role === 'admin') {
       return true;
     }
-    
+
     // Check if project is active (inactive projects not accessible to non-admins)
     if (project.isActive === false) {
       return false;
     }
-    
+
     // Check new team structure first
     if (project.team) {
       if (user.role === 'staff') {
@@ -285,7 +303,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         return project.team.client === user.id;
       }
     }
-    
+
     // Fallback to old assignedUsers field for backwards compatibility
     return project.assignedUsers?.includes(user.id) || false;
   };

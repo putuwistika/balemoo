@@ -43,7 +43,7 @@ export function ChatflowList() {
       toast.error("Please select a project first");
       return;
     }
-    
+
     try {
       await deleteChatflow(id, selectedProject.id);
       toast.success("Chatflow deleted successfully");
@@ -251,9 +251,9 @@ export function ChatflowList() {
       <CloneChatflowModal
         open={isCloneModalOpen}
         onClose={() => setIsCloneModalOpen(false)}
-        onSuccess={(clonedChatflow) => {
-          // Navigate to the newly cloned chatflow
-          navigate(`/kabar-in/chatflow/${clonedChatflow.id}`);
+        onSuccess={() => {
+          // Just close modal and stay in list - don't navigate to editor
+          setIsCloneModalOpen(false);
         }}
       />
     </div>
