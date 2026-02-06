@@ -1,20 +1,22 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, Plus, Upload, Download, Users, CheckCircle2, Clock, XCircle, HelpCircle } from 'lucide-react';
+import { Search, Filter, Plus, Upload, Download, Users, CheckCircle2, Clock, XCircle, HelpCircle, Sparkles } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGuests } from '../../contexts/GuestContext';
+import { useProject } from '../../contexts/ProjectContext';
 import { GuestCard } from './GuestCard';
 import type { Guest, RSVPStatus, GuestCategory } from '../../types/guest';
 import { toast } from 'sonner';
 
 export const GuestList: React.FC = () => {
   const { user } = useAuth();
-  const { guests, filteredGuests, loading, stats, filters, setFilters, deleteGuest } = useGuests();
-  
+  const { selectedProject } = useProject();
+  const { guests, filteredGuests, loading, stats, filters, setFilters, deleteGuest, createGuest } = useGuests();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRSVPFilter, setSelectedRSVPFilter] = useState<RSVPStatus | 'all'>('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<GuestCategory | 'all'>('all');
 
+  const [isGenerating, setIsGenerating] = useState(false);
   // Check admin access
   if (!user || user.role !== 'admin') {
     return (
@@ -43,6 +45,70 @@ export const GuestList: React.FC = () => {
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to delete guest');
       }
+    }
+  };
+
+  // Generate sample guests with Indonesian names
+  const handleGenerateSampleGuests = async () => {
+    if (!selectedProject) {
+      toast.error('Please select a project first');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const firstNames = [
+        'Made', 'Ketut', 'Wayan', 'Nyoman', 'Putu', 'Komang',
+        'Gede', 'Kadek', 'Iluh', 'Luh', 'Ni', 'I',
+        'Agung', 'Ayu', 'Dewi', 'Bagus', 'Rai', 'Dewa'
+      ];
+
+      const lastNames = [
+        'Suryawan', 'Mahendra', 'Pratama', 'Wijaya', 'Kusuma',
+        'Saputra', 'Permana', 'Santika', 'Adiputra', 'Wibawa',
+        'Artha', 'Dharma', 'Surya', 'Chandra', 'Indra'
+      ];
+
+      const categories: GuestCategory[] = ['family', 'friend', 'colleague', 'vip', 'other'];
+      const invitationTypes = ['ceremony_only', 'reception_only', 'both'] as const;
+
+      const sampleGuests = Array.from({ length: 10 }, (_, i) => {
+        const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+        const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+        const name = `${firstName} ${lastName}`;
+        const phone = `+62${Math.floor(800000000 + Math.random() * 99999999)}`;
+
+        return {
+          name,
+          phone,
+          email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@example.com`,
+          category: categories[Math.floor(Math.random() * categories.length)],
+          invitation_type: invitationTypes[Math.floor(Math.random() * invitationTypes.length)],
+          plus_one: Math.random() > 0.7,
+          tags: ['sample', 'dummy'],
+        };
+      });
+
+      // Create guests one by one
+      let successCount = 0;
+      for (const guestData of sampleGuests) {
+        try {
+          await createGuest(guestData);
+          successCount++;
+        } catch (error) {
+          console.error('Failed to create guest:', error);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully generated ${successCount} sample guests for ${selectedProject.name}!`);
+      } else {
+        toast.error('Failed to generate sample guests');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate sample guests');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -99,6 +165,29 @@ export const GuestList: React.FC = () => {
             >
               <Upload size={18} />
               Import CSV
+            </button>
+            <button
+              onClick={handleGenerateSampleGuests}
+              disabled={isGenerating}
+              style={{
+                padding: '12px 24px',
+                background: isGenerating
+                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
+                  : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                fontWeight: 600,
+                cursor: isGenerating ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: isGenerating ? 'none' : '0 4px 12px rgba(139, 92, 246, 0.3)',
+                opacity: isGenerating ? 0.6 : 1,
+              }}
+            >
+              <Sparkles size={18} />
+              {isGenerating ? 'Generating...' : 'Generate Sample Guests'}
             </button>
             <button
               onClick={() => toast.info('Add Guest form coming soon!')}
