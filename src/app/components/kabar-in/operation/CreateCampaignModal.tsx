@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useCampaigns } from '@/app/contexts/CampaignContext';
 import { useChatflows } from '@/app/contexts/ChatflowContext';
 import { useProject } from '@/app/contexts/ProjectContext';
@@ -10,8 +10,6 @@ import { Textarea } from '@/app/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
@@ -22,99 +20,116 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/app/components/ui/select';
-import { ChevronLeft, ChevronRight, Check, Loader2, Users, MessageSquare, RefreshCw } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { GuestSelectTable } from './GuestSelectTable';
 import type { CreateCampaignInput } from '@/app/types/campaign';
+import type { Guest } from '@/app/types/guest';
+import type { Chatflow } from '@/app/types/chatflow';
 
 interface CreateCampaignModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess: () => void;
 }
 
+/**
+ * Create Campaign Modal
+ * 
+ * Two-step wizard:
+ * - Step 1: Campaign details (name, description, chatflow)
+ * - Step 2: Select guests
+ * 
+ * Features:
+ * - Project isolation (uses selectedProject.id)
+ * - Guest selection persists during modal lifetime
+ * - Proper form validation
+ */
 export function CreateCampaignModal({ open, onClose, onSuccess }: CreateCampaignModalProps) {
+  const { selectedProject } = useProject();
   const { createCampaign } = useCampaigns();
   const { chatflows, fetchChatflows } = useChatflows();
-  const { selectedProject } = useProject();
   const { guests, fetchGuests } = useGuests();
 
+  // Wizard step (1 or 2)
   const [step, setStep] = useState(1);
+
+  // Loading states
   const [loading, setLoading] = useState(false);
   const [loadingGuests, setLoadingGuests] = useState(false);
 
-  // Form state
+  // Form data
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     chatflow_id: '',
   });
 
-  // Selected guest IDs (direct selection instead of filters)
+  // Selected guest IDs - tracks user's selection
   const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
 
-  // Load chatflows and refresh guests on mount
+  // Flag to track if initial guest selection has been done
+  const [hasInitiallySelected, setHasInitiallySelected] = useState(false);
+
+  // Load chatflows and guests when modal opens
   useEffect(() => {
     if (open && selectedProject?.id) {
       fetchChatflows({ projectId: selectedProject.id });
-      // Always refresh guests when modal opens to get latest data
       refreshGuests();
     }
   }, [open, selectedProject?.id]);
 
-  // Update selected guests when guests list changes
+  // Auto-select all guests ONLY ONCE when guests are first loaded
   useEffect(() => {
-    if (open && guests.length > 0) {
-      // Default: select all guests
-      setSelectedGuestIds(guests.map((g) => g.id));
+    if (open && guests.length > 0 && !hasInitiallySelected) {
+      setSelectedGuestIds(guests.map((g: Guest) => g.id));
+      setHasInitiallySelected(true);
     }
-  }, [guests, open]);
+  }, [open, guests.length, hasInitiallySelected]);
 
-  // Reset form when modal opens
+  // Reset modal state when opening/closing
   useEffect(() => {
     if (open) {
+      // Reset to initial state when opening
       setStep(1);
-      setFormData({
-        name: '',
-        description: '',
-        chatflow_id: '',
-      });
+      setFormData({ name: '', description: '', chatflow_id: '' });
+      setHasInitiallySelected(false);
+      // Don't clear selectedGuestIds here - let the auto-select effect handle it
+    } else {
+      // Clear everything when closing
+      setSelectedGuestIds([]);
+      setHasInitiallySelected(false);
     }
   }, [open]);
 
-  const refreshGuests = async () => {
+  // Refresh guests from backend
+  const refreshGuests = useCallback(async () => {
+    if (!selectedProject?.id) return;
+
+    setLoadingGuests(true);
     try {
-      setLoadingGuests(true);
       await fetchGuests();
-    } catch (err) {
-      console.error('Failed to refresh guests:', err);
+    } catch (error) {
+      console.error('Failed to refresh guests:', error);
     } finally {
       setLoadingGuests(false);
     }
-  };
+  }, [selectedProject?.id, fetchGuests]);
 
-  const handleNext = () => {
-    // Validation
-    if (step === 1) {
-      if (!formData.name.trim()) {
-        toast.error('Please enter a campaign name');
-        return;
-      }
-      if (!formData.chatflow_id) {
-        toast.error('Please select a chatflow');
-        return;
-      }
-    }
-    setStep(step + 1);
-  };
-
-  const handleBack = () => {
-    setStep(step - 1);
-  };
-
+  // Handle form submission
   const handleSubmit = async () => {
     if (!selectedProject?.id) {
-      toast.error('No project selected');
+      toast.error('Please select a project first');
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      toast.error('Campaign name is required');
+      return;
+    }
+
+    if (!formData.chatflow_id) {
+      toast.error('Please select a chatflow');
       return;
     }
 
@@ -126,209 +141,213 @@ export function CreateCampaignModal({ open, onClose, onSuccess }: CreateCampaign
     setLoading(true);
     try {
       const input: CreateCampaignInput = {
-        name: formData.name,
-        description: formData.description || undefined,
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
         chatflow_id: formData.chatflow_id,
         guest_filter: {
-          // Use custom_guest_ids for direct guest selection
           custom_guest_ids: selectedGuestIds,
         },
-        trigger_type: 'manual',
       };
 
       await createCampaign(input, selectedProject.id);
-      toast.success('Campaign created successfully!');
-      onSuccess?.();
-      handleClose();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create campaign');
+      toast.success(`Campaign "${formData.name}" created with ${selectedGuestIds.length} guests`);
+      onSuccess();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create campaign';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClose = () => {
-    setStep(1);
-    setFormData({
-      name: '',
-      description: '',
-      chatflow_id: '',
-    });
-    setSelectedGuestIds([]);
-    onClose();
-  };
+  // Validate Step 1
+  const isStep1Valid = formData.name.trim() && formData.chatflow_id;
 
-  // Allow both 'active' and 'draft' chatflows to be used in campaigns
-  const availableChatflows = chatflows.filter((cf) => cf.status === 'active' || cf.status === 'draft');
-
-  const steps = [
-    { number: 1, title: 'Campaign Setup', description: 'Name, description & chatflow' },
-    { number: 2, title: 'Select Guests', description: 'Choose target audience' },
-  ];
+  // Validate Step 2
+  const isStep2Valid = selectedGuestIds.length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Create New Campaign</DialogTitle>
-          <DialogDescription>
-            Create a campaign to send WhatsApp messages to selected guests
-          </DialogDescription>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="text-2xl font-semibold">
+            Create Campaign - Step {step} of 2
+          </DialogTitle>
         </DialogHeader>
 
-        {/* Progress Steps */}
-        <div className="flex items-center justify-center gap-8 py-4 border-b">
-          {steps.map((s, index) => (
-            <React.Fragment key={s.number}>
-              <div className="flex items-center">
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
-                    step > s.number
-                      ? 'bg-green-600 border-green-600 text-white'
-                      : step === s.number
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-400'
-                  }`}
-                >
-                  {step > s.number ? <Check className="h-5 w-5" /> : s.number}
-                </div>
-                <div className="ml-3">
-                  <div
-                    className={`text-sm font-medium ${
-                      step >= s.number ? 'text-gray-900' : 'text-gray-400'
-                    }`}
-                  >
-                    {s.title}
-                  </div>
-                  <div className="text-xs text-gray-500">{s.description}</div>
-                </div>
-              </div>
-              {index < steps.length - 1 && (
-                <div
-                  className={`w-16 h-0.5 ${step > s.number ? 'bg-green-600' : 'bg-gray-300'}`}
-                />
-              )}
-            </React.Fragment>
-          ))}
+        {/* Step Indicator */}
+        <div className="flex items-center gap-4 px-6 py-4 border-b bg-gray-50">
+          <StepIndicator
+            step={1}
+            currentStep={step}
+            label="Campaign Details"
+          />
+          <div className="flex-1 h-px bg-gray-300" />
+          <StepIndicator
+            step={2}
+            currentStep={step}
+            label="Select Guests"
+          />
         </div>
 
-        {/* Step Content */}
-        <div className="flex-1 overflow-y-auto py-4 px-1">
-          {step === 1 && (
-            <Step1CampaignSetup
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {step === 1 ? (
+            <Step1Content
               formData={formData}
               setFormData={setFormData}
-              chatflows={availableChatflows}
+              chatflows={chatflows}
             />
-          )}
-          {step === 2 && (
-            <div className="space-y-4">
-              {/* Refresh button */}
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={refreshGuests}
-                  disabled={loadingGuests}
-                >
-                  {loadingGuests ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                  )}
-                  Refresh Guests
-                </Button>
-              </div>
-              <GuestSelectTable
-                selectedGuestIds={selectedGuestIds}
-                onSelectionChange={setSelectedGuestIds}
-              />
-            </div>
+          ) : (
+            <Step2Content
+              guests={guests}
+              selectedGuestIds={selectedGuestIds}
+              setSelectedGuestIds={setSelectedGuestIds}
+              loading={loadingGuests}
+              onRefresh={refreshGuests}
+            />
           )}
         </div>
 
-        {/* Footer Actions */}
-        <DialogFooter className="flex items-center justify-between border-t pt-4">
-          <div className="flex gap-2">
-            {step > 1 && (
-              <Button variant="outline" onClick={handleBack} disabled={loading}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            {step === 2 && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Users className="h-4 w-4" />
-                <span>{selectedGuestIds.length} guests selected</span>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={handleClose} disabled={loading}>
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
+          <Button
+            variant="ghost"
+            onClick={step === 1 ? onClose : () => setStep(1)}
+            disabled={loading}
+          >
+            {step === 1 ? (
+              <>
+                <X className="h-4 w-4 mr-2" />
                 Cancel
+              </>
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Back
+              </>
+            )}
+          </Button>
+
+          <div className="flex items-center gap-2">
+            {step === 2 && (
+              <span className="text-sm text-gray-600 mr-4">
+                {selectedGuestIds.length} of {guests.length} guests selected
+              </span>
+            )}
+
+            {step === 1 ? (
+              <Button
+                onClick={() => setStep(2)}
+                disabled={!isStep1Valid}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
-              {step < 2 ? (
-                <Button onClick={handleNext}>
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={loading || selectedGuestIds.length === 0}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      Create Campaign
-                      <MessageSquare className="h-4 w-4 ml-2" />
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
+            ) : (
+              <Button
+                onClick={handleSubmit}
+                disabled={loading || !isStep2Valid}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Campaign'
+                )}
+              </Button>
+            )}
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-// Step 1: Campaign Setup (combined basic info + chatflow selection)
-function Step1CampaignSetup({ formData, setFormData, chatflows }: any) {
+/**
+ * Step Indicator Component
+ */
+interface StepIndicatorProps {
+  step: number;
+  currentStep: number;
+  label: string;
+}
+
+function StepIndicator({ step, currentStep, label }: StepIndicatorProps) {
+  const isActive = step === currentStep;
+  const isCompleted = step < currentStep;
+
   return (
-    <div className="space-y-6 max-w-xl mx-auto">
+    <div className="flex items-center gap-2">
+      <div
+        className={`
+          w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+          ${isActive
+            ? 'bg-blue-600 text-white'
+            : isCompleted
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-100 text-gray-500'
+          }
+        `}
+      >
+        {step}
+      </div>
+      <span className={`text-sm ${isActive ? 'font-medium text-gray-900' : 'text-gray-500'}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Step 1: Campaign Details
+ */
+interface Step1ContentProps {
+  formData: {
+    name: string;
+    description: string;
+    chatflow_id: string;
+  };
+  setFormData: React.Dispatch<React.SetStateAction<{
+    name: string;
+    description: string;
+    chatflow_id: string;
+  }>>;
+  chatflows: Chatflow[];
+}
+
+function Step1Content({ formData, setFormData, chatflows }: Step1ContentProps) {
+  return (
+    <div className="space-y-6 max-w-lg">
       {/* Campaign Name */}
       <div>
-        <Label htmlFor="name" className="text-base font-medium">
-          Campaign Name *
+        <Label htmlFor="campaign-name" className="text-base font-medium">
+          Campaign Name <span className="text-red-500">*</span>
         </Label>
         <Input
-          id="name"
+          id="campaign-name"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="e.g., VIP Initial Invitation"
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setFormData({ ...formData, name: e.target.value })
+          }
+          placeholder="Enter campaign name"
           className="mt-2"
         />
-        <p className="mt-1 text-sm text-gray-500">
-          Choose a descriptive name to identify this campaign
-        </p>
       </div>
 
       {/* Description */}
       <div>
-        <Label htmlFor="description" className="text-base font-medium">
-          Description (Optional)
+        <Label htmlFor="campaign-description" className="text-base font-medium">
+          Description
         </Label>
         <Textarea
-          id="description"
+          id="campaign-description"
           value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
           placeholder="Describe the purpose of this campaign..."
           rows={3}
           className="mt-2"
@@ -337,47 +356,86 @@ function Step1CampaignSetup({ formData, setFormData, chatflows }: any) {
 
       {/* Chatflow Selection */}
       <div>
-        <Label htmlFor="chatflow" className="text-base font-medium">
-          Select Chatflow *
+        <Label htmlFor="campaign-chatflow" className="text-base font-medium">
+          Select Chatflow <span className="text-red-500">*</span>
         </Label>
         <Select
           value={formData.chatflow_id}
-          onValueChange={(value) => setFormData({ ...formData, chatflow_id: value })}
+          onValueChange={(value: string) =>
+            setFormData({ ...formData, chatflow_id: value })
+          }
         >
-          <SelectTrigger className="mt-2">
+          <SelectTrigger id="campaign-chatflow" className="mt-2">
             <SelectValue placeholder="Choose a chatflow to use" />
           </SelectTrigger>
           <SelectContent>
             {chatflows.length === 0 ? (
-              <div className="p-4 text-sm text-gray-500">
-                No active chatflows available. Create one first in Chatflow Studio.
-              </div>
+              <SelectItem value="_none" disabled>
+                No chatflows available
+              </SelectItem>
             ) : (
-              chatflows.map((chatflow: any) => (
-                <SelectItem key={chatflow.id} value={chatflow.id}>
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-gray-400" />
-                    {chatflow.name}
-                  </div>
+              chatflows.map((cf: Chatflow) => (
+                <SelectItem key={cf.id} value={cf.id}>
+                  {cf.name}
                 </SelectItem>
               ))
             )}
           </SelectContent>
         </Select>
-        <p className="mt-1 text-sm text-gray-500">
-          The chatflow defines the message sequence that will be sent to guests
-        </p>
+        {chatflows.length === 0 && (
+          <p className="text-sm text-amber-600 mt-2">
+            Please create a chatflow first before creating a campaign.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Step 2: Select Guests
+ */
+interface Step2ContentProps {
+  guests: Guest[];
+  selectedGuestIds: string[];
+  setSelectedGuestIds: React.Dispatch<React.SetStateAction<string[]>>;
+  loading: boolean;
+  onRefresh: () => void;
+}
+
+function Step2Content({
+  guests,
+  selectedGuestIds,
+  setSelectedGuestIds,
+  loading,
+  onRefresh,
+}: Step2ContentProps) {
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-gray-500" />
+          <span className="font-medium">Select Recipients</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
-      {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="font-medium text-blue-900 mb-1">How it works</h4>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>1. Set up your campaign name and select a chatflow</li>
-          <li>2. Choose which guests to include in this campaign</li>
-          <li>3. Start the campaign to begin sending messages</li>
-        </ul>
-      </div>
+      {/* Guest Selection Table */}
+      <GuestSelectTable
+        guests={guests}
+        selectedIds={selectedGuestIds}
+        onSelectionChange={setSelectedGuestIds}
+        loading={loading}
+      />
     </div>
   );
 }

@@ -2,49 +2,52 @@ import React from 'react';
 
 interface ProgressBarProps {
   progress: number; // 0-100
-  className?: string;
-  showLabel?: boolean;
   size?: 'sm' | 'md' | 'lg';
-  color?: 'blue' | 'green' | 'purple' | 'yellow' | 'red';
+  showLabel?: boolean;
+  className?: string;
 }
 
+/**
+ * Progress Bar Component
+ * 
+ * Displays a progress bar with optional label
+ */
 export function ProgressBar({
   progress,
-  className = '',
-  showLabel = true,
   size = 'md',
-  color = 'blue'
+  showLabel = true,
+  className = ''
 }: ProgressBarProps) {
-  const clampedProgress = Math.min(Math.max(progress, 0), 100);
+  // Clamp progress between 0 and 100
+  const clampedProgress = Math.min(100, Math.max(0, progress));
 
-  const heightClasses = {
-    sm: 'h-1',
-    md: 'h-2',
-    lg: 'h-3',
+  const sizeClasses = {
+    sm: 'h-1.5',
+    md: 'h-2.5',
+    lg: 'h-4',
   };
 
-  const colorClasses = {
-    blue: 'bg-blue-600',
-    green: 'bg-green-600',
-    purple: 'bg-purple-600',
-    yellow: 'bg-yellow-600',
-    red: 'bg-red-600',
+  // Determine color based on progress
+  const getColor = (value: number) => {
+    if (value >= 100) return 'bg-green-500';
+    if (value >= 66) return 'bg-blue-500';
+    if (value >= 33) return 'bg-yellow-500';
+    return 'bg-gray-400';
   };
 
   return (
-    <div className={`w-full ${className}`}>
-      {showLabel && (
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-xs font-medium text-gray-700">Progress</span>
-          <span className="text-xs font-medium text-gray-700">{clampedProgress.toFixed(0)}%</span>
-        </div>
-      )}
-      <div className={`w-full bg-gray-200 rounded-full overflow-hidden ${heightClasses[size]}`}>
+    <div className={className}>
+      <div className={`w-full bg-gray-200 rounded-full overflow-hidden ${sizeClasses[size]}`}>
         <div
-          className={`${colorClasses[color]} ${heightClasses[size]} rounded-full transition-all duration-300 ease-out`}
+          className={`${sizeClasses[size]} rounded-full transition-all duration-300 ${getColor(clampedProgress)}`}
           style={{ width: `${clampedProgress}%` }}
         />
       </div>
+      {showLabel && (
+        <div className="text-xs text-gray-600 mt-1 text-right">
+          {Math.round(clampedProgress)}%
+        </div>
+      )}
     </div>
   );
 }

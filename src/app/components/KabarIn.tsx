@@ -8,6 +8,8 @@ import { ComingSoonPage } from "./kabar-in/ComingSoonPage";
 import { ChatflowStudio } from "./kabar-in/chatflow/ChatflowStudio";
 import { OperationCenter } from "./kabar-in/operation/OperationCenter";
 import { CampaignDetailPage } from "./kabar-in/operation/CampaignDetailPage";
+import { FlowList } from "./kabar-in/whatsapp-flow/FlowList";
+import { FlowStudio } from "./kabar-in/whatsapp-flow/FlowStudio";
 
 function Messages() {
   return (
@@ -78,6 +80,8 @@ export function KabarIn() {
         <Route path="guests" element={<GuestList />} />
         <Route path="chatflow" element={<ChatflowStudio />} />
         <Route path="chatflow/:id" element={<ChatflowStudio />} />
+        <Route path="whatsapp-flows" element={<FlowList />} />
+        <Route path="whatsapp-flows/:flowId" element={<FlowStudio />} />
         <Route path="operation" element={<OperationCenter />} />
         <Route path="operation/:campaignId" element={<CampaignDetailPage />} />
         <Route path="messages" element={<Messages />} />

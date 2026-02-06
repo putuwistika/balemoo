@@ -53,6 +53,12 @@ const menuItems: MenuItem[] = [
     color: "#f59e0b",
   },
   {
+    icon: FileText,
+    label: "WhatsApp Flows",
+    path: "/kabar-in/whatsapp-flows",
+    color: "#25D366",
+  },
+  {
     icon: Radio,
     label: "Operation Center",
     path: "/kabar-in/operation",
@@ -224,8 +230,8 @@ export function KabarInLayout({ children }: KabarInLayoutProps) {
                   background: active
                     ? "linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%)"
                     : hovered
-                    ? "rgba(0, 0, 0, 0.03)"
-                    : "transparent",
+                      ? "rgba(0, 0, 0, 0.03)"
+                      : "transparent",
                   border: active
                     ? "1px solid rgba(139, 92, 246, 0.3)"
                     : "1px solid transparent",

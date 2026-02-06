@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useExecutions } from '@/app/contexts/ExecutionContext';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -21,37 +21,54 @@ interface ExecutionListProps {
   campaignId: string;
 }
 
+/**
+ * Execution List Component
+ * 
+ * Features:
+ * - List all executions for a campaign
+ * - Search by guest name or phone
+ * - Filter by status
+ * - Bulk selection and actions
+ * - Progress tracking
+ */
 export function ExecutionList({ campaignId }: ExecutionListProps) {
   const { executions, loading, fetchExecutions } = useExecutions();
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ExecutionStatus | 'all'>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    fetchExecutions(campaignId);
-  }, [campaignId]);
+  // Filter executions
+  const filteredExecutions = useMemo(() => {
+    return executions.filter((execution: ChatflowExecution) => {
+      // Search filter
+      const matchesSearch =
+        search === '' ||
+        execution.guest_name.toLowerCase().includes(search.toLowerCase()) ||
+        execution.guest_phone.includes(search);
 
-  const filteredExecutions = executions.filter((execution) => {
-    // Search filter
-    const matchesSearch =
-      search === '' ||
-      execution.guest_name.toLowerCase().includes(search.toLowerCase()) ||
-      execution.guest_phone.includes(search);
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || execution.status === statusFilter;
 
-    // Status filter
-    const matchesStatus = statusFilter === 'all' || execution.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [executions, search, statusFilter]);
 
-    return matchesSearch && matchesStatus;
-  });
+  // Selection helpers
+  const allSelected = filteredExecutions.length > 0 &&
+    selectedIds.length === filteredExecutions.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredExecutions.length;
 
+  // Handle select all
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(filteredExecutions.map((e) => e.id));
+      setSelectedIds(filteredExecutions.map((e: ChatflowExecution) => e.id));
     } else {
       setSelectedIds([]);
     }
   };
 
+  // Handle individual selection
   const handleSelectOne = (executionId: string, checked: boolean) => {
     if (checked) {
       setSelectedIds([...selectedIds, executionId]);
@@ -60,15 +77,13 @@ export function ExecutionList({ campaignId }: ExecutionListProps) {
     }
   };
 
+  // Handle bulk action complete
   const handleBulkActionComplete = () => {
     setSelectedIds([]);
     fetchExecutions(campaignId);
   };
 
-  const allSelected =
-    filteredExecutions.length > 0 && selectedIds.length === filteredExecutions.length;
-  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredExecutions.length;
-
+  // Loading state
   if (loading && executions.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -88,7 +103,7 @@ export function ExecutionList({ campaignId }: ExecutionListProps) {
             <Input
               placeholder="Search by name or phone..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -96,7 +111,7 @@ export function ExecutionList({ campaignId }: ExecutionListProps) {
           {/* Status Filter */}
           <Select
             value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value as ExecutionStatus | 'all')}
+            onValueChange={(value: string) => setStatusFilter(value as ExecutionStatus | 'all')}
           >
             <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Filter by status" />
@@ -137,7 +152,7 @@ export function ExecutionList({ campaignId }: ExecutionListProps) {
                 <Checkbox
                   checked={allSelected}
                   onCheckedChange={handleSelectAll}
-                  aria-label="Select all"
+                  aria-label="Select all executions"
                   className={someSelected ? 'data-[state=checked]:bg-blue-600' : ''}
                 />
               </th>
@@ -166,7 +181,7 @@ export function ExecutionList({ campaignId }: ExecutionListProps) {
                 </td>
               </tr>
             ) : (
-              filteredExecutions.map((execution) => (
+              filteredExecutions.map((execution: ChatflowExecution) => (
                 <ExecutionRow
                   key={execution.id}
                   execution={execution}
@@ -182,7 +197,9 @@ export function ExecutionList({ campaignId }: ExecutionListProps) {
   );
 }
 
-// Execution Row Component
+/**
+ * Execution Row Component
+ */
 interface ExecutionRowProps {
   execution: ChatflowExecution;
   selected: boolean;
@@ -190,14 +207,20 @@ interface ExecutionRowProps {
 }
 
 function ExecutionRow({ execution, selected, onSelect }: ExecutionRowProps) {
-  const completedNodes = execution.node_history.filter((n) => n.status === 'completed').length;
-  const totalNodes = execution.node_history.length || 1;
+  const completedNodes = execution.node_history?.filter(
+    (n: { status: string }) => n.status === 'completed'
+  ).length || 0;
+  const totalNodes = execution.node_history?.length || 1;
   const progress = (completedNodes / totalNodes) * 100;
 
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-4">
-        <Checkbox checked={selected} onCheckedChange={onSelect} />
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          aria-label={`Select execution for ${execution.guest_name}`}
+        />
       </td>
       <td className="px-4 py-4">
         <div>

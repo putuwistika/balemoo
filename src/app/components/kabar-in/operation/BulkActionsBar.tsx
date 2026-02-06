@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useExecutions } from '@/app/contexts/ExecutionContext';
 import { Button } from '@/app/components/ui/button';
-import { RotateCcw, Pause, Play, Ban, Loader2, X } from 'lucide-react';
+import { Loader2, RotateCcw, Pause, Play, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface BulkActionsBarProps {
@@ -10,179 +10,161 @@ interface BulkActionsBarProps {
   onComplete: () => void;
 }
 
+/**
+ * Bulk Actions Bar Component
+ * 
+ * Provides bulk actions for selected executions:
+ * - Retry failed executions
+ * - Pause running executions
+ * - Resume paused executions
+ * - Cancel executions
+ */
 export function BulkActionsBar({ campaignId, selectedIds, onComplete }: BulkActionsBarProps) {
   const { bulkRetryExecutions, bulkPauseExecutions, bulkResumeExecutions, bulkCancelExecutions } =
     useExecutions();
-  const [loading, setLoading] = useState(false);
 
-  const handleBulkRetry = async () => {
-    setLoading(true);
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleRetry = async () => {
+    setLoading('retry');
     try {
       const result = await bulkRetryExecutions(campaignId, selectedIds);
-
-      if (result.succeeded.length > 0) {
-        toast.success(`${result.succeeded.length} execution(s) retried successfully`);
+      toast.success(`Retried ${result.success} execution(s)`);
+      if (result.failed > 0) {
+        toast.warning(`${result.failed} execution(s) failed to retry`);
       }
-
-      if (result.failed.length > 0) {
-        toast.error(`${result.failed.length} execution(s) failed to retry`);
-      }
-
       onComplete();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to retry executions');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to retry executions';
+      toast.error(message);
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
-  const handleBulkPause = async () => {
-    setLoading(true);
+  const handlePause = async () => {
+    setLoading('pause');
     try {
       const result = await bulkPauseExecutions(selectedIds);
-
-      if (result.succeeded.length > 0) {
-        toast.success(`${result.succeeded.length} execution(s) paused successfully`);
+      toast.success(`Paused ${result.success} execution(s)`);
+      if (result.failed > 0) {
+        toast.warning(`${result.failed} execution(s) failed to pause`);
       }
-
-      if (result.failed.length > 0) {
-        toast.error(`${result.failed.length} execution(s) failed to pause`);
-      }
-
       onComplete();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to pause executions');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to pause executions';
+      toast.error(message);
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
-  const handleBulkResume = async () => {
-    setLoading(true);
+  const handleResume = async () => {
+    setLoading('resume');
     try {
       const result = await bulkResumeExecutions(campaignId, selectedIds);
-
-      if (result.succeeded.length > 0) {
-        toast.success(`${result.succeeded.length} execution(s) resumed successfully`);
+      toast.success(`Resumed ${result.success} execution(s)`);
+      if (result.failed > 0) {
+        toast.warning(`${result.failed} execution(s) failed to resume`);
       }
-
-      if (result.failed.length > 0) {
-        toast.error(`${result.failed.length} execution(s) failed to resume`);
-      }
-
       onComplete();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to resume executions');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to resume executions';
+      toast.error(message);
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
-  const handleBulkCancel = async () => {
+  const handleCancel = async () => {
     if (!confirm(`Are you sure you want to cancel ${selectedIds.length} execution(s)?`)) {
       return;
     }
 
-    setLoading(true);
+    setLoading('cancel');
     try {
       const result = await bulkCancelExecutions(selectedIds);
-
-      if (result.succeeded.length > 0) {
-        toast.success(`${result.succeeded.length} execution(s) cancelled successfully`);
+      toast.success(`Cancelled ${result.success} execution(s)`);
+      if (result.failed > 0) {
+        toast.warning(`${result.failed} execution(s) failed to cancel`);
       }
-
-      if (result.failed.length > 0) {
-        toast.error(`${result.failed.length} execution(s) failed to cancel`);
-      }
-
       onComplete();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to cancel executions');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to cancel executions';
+      toast.error(message);
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
+  const isLoading = loading !== null;
+
   return (
-    <div className="bg-blue-50 border-y border-blue-200 px-4 py-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-blue-900">
-            {selectedIds.length} execution(s) selected
-          </span>
-        </div>
+    <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+      <span className="text-sm font-medium text-blue-800">
+        {selectedIds.length} execution(s) selected
+      </span>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBulkRetry}
-            disabled={loading}
-            className="bg-white"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <RotateCcw className="h-4 w-4 mr-1" />
-            )}
-            Retry
-          </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRetry}
+          disabled={isLoading}
+          className="text-blue-700 border-blue-300 hover:bg-blue-100"
+        >
+          {loading === 'retry' ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <RotateCcw className="h-4 w-4 mr-1" />
+          )}
+          Retry
+        </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBulkPause}
-            disabled={loading}
-            className="bg-white"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Pause className="h-4 w-4 mr-1" />
-            )}
-            Pause
-          </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handlePause}
+          disabled={isLoading}
+          className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+        >
+          {loading === 'pause' ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <Pause className="h-4 w-4 mr-1" />
+          )}
+          Pause
+        </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBulkResume}
-            disabled={loading}
-            className="bg-white"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 mr-1" />
-            )}
-            Resume
-          </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleResume}
+          disabled={isLoading}
+          className="text-green-700 border-green-300 hover:bg-green-100"
+        >
+          {loading === 'resume' ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <Play className="h-4 w-4 mr-1" />
+          )}
+          Resume
+        </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBulkCancel}
-            disabled={loading}
-            className="bg-white text-red-600 hover:text-red-700"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Ban className="h-4 w-4 mr-1" />
-            )}
-            Cancel
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onComplete}
-            disabled={loading}
-            className="ml-2"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleCancel}
+          disabled={isLoading}
+          className="text-red-700 border-red-300 hover:bg-red-100"
+        >
+          {loading === 'cancel' ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <Ban className="h-4 w-4 mr-1" />
+          )}
+          Cancel
+        </Button>
       </div>
     </div>
   );

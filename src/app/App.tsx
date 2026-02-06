@@ -16,6 +16,7 @@ import { ProjectProvider } from "./contexts/ProjectContext";
 import { TemplateProvider } from "./contexts/TemplateContext";
 import { GuestProvider } from "./contexts/GuestContext";
 import { ChatflowProvider } from "./contexts/ChatflowContext";
+import { WhatsAppFlowProvider } from "./contexts/WhatsAppFlowContext";
 import { CampaignProvider } from "./contexts/CampaignContext";
 import { ExecutionProvider } from "./contexts/ExecutionContext";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -60,35 +61,37 @@ export default function App() {
             <TemplateProvider>
               <GuestProvider>
                 <ChatflowProvider>
-                  <CampaignProvider>
-                    <ExecutionProvider>
-                      <Suspense fallback={<LoadingFallback />}>
-                    <div className="size-full">
-                      <AppHeader />
-                      <Routes>
-                        <Route path="/" element={<LandingPage />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/demo" element={<DemoUsers />} />
-                        <Route path="/projects" element={<ProjectSelection />} />
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        {/* Placeholder routes for products */}
-                        <Route path="/kabar-in/*" element={<KabarIn />} />
-                        <Route path="/check-in" element={<CheckIn />} />
-                        <Route path="/monitor-in" element={<MonitorIn />} />
-                        {/* Catch all route */}
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                      </Routes>
-                    </div>
-                      </Suspense>
-                      <Toaster />
-                    </ExecutionProvider>
-                  </CampaignProvider>
+                  <WhatsAppFlowProvider>
+                    <CampaignProvider>
+                      <ExecutionProvider>
+                        <Suspense fallback={<LoadingFallback />}>
+                          <div className="size-full">
+                            <AppHeader />
+                            <Routes>
+                              <Route path="/" element={<LandingPage />} />
+                              <Route path="/login" element={<Login />} />
+                              <Route path="/demo" element={<DemoUsers />} />
+                              <Route path="/projects" element={<ProjectSelection />} />
+                              <Route path="/dashboard" element={<Dashboard />} />
+                              {/* Placeholder routes for products */}
+                              <Route path="/kabar-in/*" element={<KabarIn />} />
+                              <Route path="/check-in" element={<CheckIn />} />
+                              <Route path="/monitor-in" element={<MonitorIn />} />
+                              {/* Catch all route */}
+                              <Route path="*" element={<Navigate to="/" replace />} />
+                            </Routes>
+                          </div>
+                        </Suspense>
+                        <Toaster />
+                      </ExecutionProvider>
+                    </CampaignProvider>
+                  </WhatsAppFlowProvider>
                 </ChatflowProvider>
               </GuestProvider>
             </TemplateProvider>
           </ProjectProvider>
         </AuthProvider>
       </BrowserRouter>
-    </ErrorBoundary>
+    </ErrorBoundary >
   );
 }

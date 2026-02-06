@@ -174,7 +174,7 @@ export async function filterGuests(
 
   console.log(`[filterGuests] loaded ${guests.length} guests from KV`);
   if (guests.length > 0) {
-    console.log(`[filterGuests] sample guest IDs:`, guests.slice(0, 3).map(g => g.id));
+    console.log(`[filterGuests] sample guest IDs from objects:`, guests.slice(0, 3).map(g => g.id));
   }
 
   // Apply filters
@@ -183,8 +183,14 @@ export async function filterGuests(
   // Filter by custom_guest_ids (override all other filters)
   if (filter.custom_guest_ids && filter.custom_guest_ids.length > 0) {
     console.log(`[filterGuests] filtering by custom_guest_ids (${filter.custom_guest_ids.length}):`, filter.custom_guest_ids.slice(0, 3));
+    // Use guest.id (which includes the 'guest_' prefix) for comparison
     const result = filtered.filter(g => filter.custom_guest_ids!.includes(g.id));
     console.log(`[filterGuests] after filter: ${result.length} guests matched`);
+    if (result.length === 0 && filtered.length > 0) {
+      console.log(`[filterGuests] WARNING: No matches! Comparing:`);
+      console.log(`  - filter IDs:`, filter.custom_guest_ids.slice(0, 2));
+      console.log(`  - guest IDs:`, filtered.slice(0, 2).map(g => g.id));
+    }
     return result;
   }
 

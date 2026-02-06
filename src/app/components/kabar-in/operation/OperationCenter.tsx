@@ -1,14 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useCampaigns } from '@/app/contexts/CampaignContext';
 import { useProject } from '@/app/contexts/ProjectContext';
-import { useGuests } from '@/app/contexts/GuestContext';
 import { Button } from '@/app/components/ui/button';
-import { Plus, Loader2, Users, Sparkles, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Trash2, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Campaign } from '@/app/types/campaign';
 import { CreateCampaignModal } from './CreateCampaignModal';
 import { CampaignStatusBadge } from './shared/CampaignStatusBadge';
-import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,71 +17,80 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/app/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
+/**
+ * Operation Center - Campaign Management Dashboard
+ * 
+ * Features:
+ * - List all campaigns for current project
+ * - Create new campaigns
+ * - Delete campaigns
+ * - Navigate to campaign details
+ * - Project isolation (only shows campaigns for selected project)
+ */
 export function OperationCenter() {
-  const { campaigns, loading, error, fetchCampaigns, deleteCampaign } = useCampaigns();
-  const { selectedProject } = useProject();
-  const { guests, seedSampleGuests, fetchGuests } = useGuests();
   const navigate = useNavigate();
+  const { selectedProject } = useProject();
+  const { campaigns, loading, fetchCampaigns, deleteCampaign } = useCampaigns();
+
+  // UI State
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [seeding, setSeeding] = useState(false);
-  const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Campaign | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Memoize the fetch function to prevent infinite loops
-  const loadCampaigns = useCallback(() => {
+  // Fetch campaigns when project changes
+  useEffect(() => {
     if (selectedProject?.id) {
       fetchCampaigns(selectedProject.id);
     }
-  }, [selectedProject?.id]);
+  }, [selectedProject?.id, fetchCampaigns]);
 
-  useEffect(() => {
-    loadCampaigns();
-  }, [loadCampaigns]);
-
-  const handleCreateSuccess = () => {
-    loadCampaigns();
-  };
-
-  const handleSeedGuests = async () => {
+  // Refresh campaigns
+  const handleRefresh = useCallback(async () => {
+    if (!selectedProject?.id) return;
+    setRefreshing(true);
     try {
-      setSeeding(true);
-      setSeedMessage(null);
-      const seededGuests = await seedSampleGuests(true); // clear first
-      setSeedMessage(`Berhasil menambahkan ${seededGuests.length} sample guests!`);
-      // Refresh guests list
-      await fetchGuests();
-      setTimeout(() => setSeedMessage(null), 5000);
-    } catch (err) {
-      setSeedMessage(`Error: ${err instanceof Error ? err.message : 'Failed to seed guests'}`);
+      await fetchCampaigns(selectedProject.id);
+      toast.success('Campaigns refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh campaigns');
     } finally {
-      setSeeding(false);
+      setRefreshing(false);
     }
-  };
+  }, [selectedProject?.id, fetchCampaigns]);
 
-  const handleDeleteCampaign = async () => {
+  // Delete campaign
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    
+
+    setDeleting(true);
     try {
-      setDeleting(true);
       await deleteCampaign(deleteTarget.id);
-      toast.success(`Campaign "${deleteTarget.name}" deleted successfully`);
+      toast.success(`Campaign "${deleteTarget.name}" deleted`);
       setDeleteTarget(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete campaign');
+      if (selectedProject?.id) {
+        fetchCampaigns(selectedProject.id);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete campaign';
+      toast.error(message);
     } finally {
       setDeleting(false);
     }
   };
 
+  // Navigate to campaign detail
+  const handleCampaignClick = (campaign: Campaign) => {
+    navigate(`/kabar-in/operation/${campaign.id}`);
+  };
+
+  // No project selected
   if (!selectedProject) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold text-gray-900">No Project Selected</h2>
-          <p className="mt-2 text-gray-600">Please select a project to view campaigns</p>
-        </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-gray-500">Please select a project first</p>
       </div>
     );
   }
@@ -94,98 +101,42 @@ export function OperationCenter() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Operation Center</h1>
-          <p className="mt-2 text-gray-600">
-            Create and manage WhatsApp campaigns for your guests
+          <p className="text-gray-600 mt-1">
+            Manage campaigns for {selectedProject.name}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Guest count indicator */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
-            <Users className="h-4 w-4 text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">
-              {guests.length} guests
-            </span>
-          </div>
-          
-          {/* Seed Sample Guests button */}
+        <div className="flex gap-3">
           <Button
             variant="outline"
-            onClick={handleSeedGuests}
-            disabled={seeding}
-            className="flex items-center gap-2"
+            onClick={handleRefresh}
+            disabled={refreshing}
           >
-            {seeding ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            {seeding ? 'Seeding...' : 'Seed Sample Guests'}
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
-          
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
             Create Campaign
           </Button>
         </div>
       </div>
 
-      {/* Seed Message */}
-      {seedMessage && (
-        <div className={`mb-6 p-4 rounded-lg ${
-          seedMessage.startsWith('Error') 
-            ? 'bg-red-50 border border-red-200 text-red-800' 
-            : 'bg-green-50 border border-green-200 text-green-800'
-        }`}>
-          <p>{seedMessage}</p>
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800">{error}</p>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && !error && campaigns.length === 0 && (
-        <div className="text-center py-12">
-          <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <Plus className="h-12 w-12 text-gray-400" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            No Campaigns Yet
-          </h3>
-          <p className="text-gray-600 mb-6">
-            Create your first campaign to start sending WhatsApp messages to guests
-          </p>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create First Campaign
-          </Button>
-        </div>
-      )}
-
       {/* Campaign List */}
-      {!loading && campaigns.length > 0 && (
+      {loading && campaigns.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-48 bg-gray-100 rounded-lg animate-pulse border border-gray-200" />
+          ))}
+        </div>
+      ) : campaigns.length === 0 ? (
+        <EmptyState onCreateClick={() => setShowCreateModal(true)} />
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {campaigns.map((campaign) => (
-            <CampaignCard 
-              key={campaign.id} 
-              campaign={campaign} 
+            <CampaignCard
+              key={campaign.id}
+              campaign={campaign}
+              onClick={() => handleCampaignClick(campaign)}
               onDelete={() => setDeleteTarget(campaign)}
             />
           ))}
@@ -196,23 +147,28 @@ export function OperationCenter() {
       <CreateCampaignModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSuccess={handleCreateSuccess}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          if (selectedProject?.id) {
+            fetchCampaigns(selectedProject.id);
+          }
+        }}
       />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Campaign</AlertDialogTitle>
+            <AlertDialogTitle>Delete Campaign?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteTarget?.name}"? This action cannot be undone.
-              All campaign data including executions and messages will be permanently deleted.
+              Are you sure you want to delete "{deleteTarget?.name}"?
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteCampaign}
+              onClick={handleDelete}
               disabled={deleting}
               className="bg-red-600 hover:bg-red-700"
             >
@@ -232,86 +188,108 @@ export function OperationCenter() {
   );
 }
 
-// Campaign Card Component
-function CampaignCard({ campaign, onDelete }: { campaign: Campaign; onDelete: () => void }) {
-  const navigate = useNavigate();
+/**
+ * Empty State Component
+ */
+function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
+  return (
+    <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+      <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+        <Plus className="h-8 w-8 text-blue-600" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">No campaigns yet</h3>
+      <p className="text-gray-600 mb-6 max-w-md mx-auto">
+        Create your first campaign to start sending messages to your guests
+      </p>
+      <Button onClick={onCreateClick}>
+        <Plus className="h-4 w-4 mr-2" />
+        Create Campaign
+      </Button>
+    </div>
+  );
+}
 
-  const handleClick = () => {
-    navigate(`/kabar-in/operation/${campaign.id}`);
-  };
+/**
+ * Campaign Card Component
+ */
+interface CampaignCardProps {
+  campaign: Campaign;
+  onClick: () => void;
+  onDelete: () => void;
+}
+
+function CampaignCard({ campaign, onClick, onDelete }: CampaignCardProps) {
+  // Calculate guest count from guest_filter or stats
+  const guestCount = campaign.guest_filter?.custom_guest_ids?.length
+    || campaign.stats?.total_guests
+    || 0;
 
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer"
-      onClick={handleClick}
+      className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer group"
+      onClick={onClick}
     >
+      {/* Header */}
       <div className="flex items-start justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 flex-1 mr-2">{campaign.name}</h3>
-        <div className="flex items-center gap-2">
-          <CampaignStatusBadge status={campaign.status} />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold text-gray-900 truncate">
+            {campaign.name}
+          </h3>
+          <CampaignStatusBadge status={campaign.status} className="mt-2" />
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
 
+      {/* Description */}
       {campaign.description && (
         <p className="text-sm text-gray-600 mb-4 line-clamp-2">
           {campaign.description}
         </p>
       )}
 
+      {/* Info */}
       <div className="space-y-2 text-sm">
         <div className="flex justify-between">
-          <span className="text-gray-600">Chatflow:</span>
+          <span className="text-gray-500">Chatflow:</span>
           <span className="font-medium text-gray-900 truncate ml-2">
-            {campaign.chatflow_name}
+            {campaign.chatflow_name || 'Not set'}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-600">Total Guests:</span>
-          <span className="font-medium text-gray-900">
-            {campaign.guest_filter?.custom_guest_ids?.length || campaign.stats?.total_guests || 0}
-          </span>
+          <span className="text-gray-500">Total Guests:</span>
+          <span className="font-medium text-gray-900">{guestCount}</span>
         </div>
-        {campaign.stats && campaign.status === 'running' && (
+        {campaign.stats && campaign.status !== 'draft' && (
           <>
             <div className="flex justify-between">
-              <span className="text-gray-600">Running:</span>
+              <span className="text-gray-500">Completed:</span>
               <span className="font-medium text-green-600">
-                {campaign.stats.executions_running}
+                {campaign.stats.executions_completed}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Completed:</span>
-              <span className="font-medium text-purple-600">
-                {campaign.stats.executions_completed}
+              <span className="text-gray-500">Failed:</span>
+              <span className="font-medium text-red-600">
+                {campaign.stats.executions_failed}
               </span>
             </div>
           </>
         )}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleClick();
-          }}
-        >
-          View Details
-        </Button>
+      {/* Created date */}
+      <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
+        Created {new Date(campaign.created_at).toLocaleDateString()}
       </div>
     </div>
   );

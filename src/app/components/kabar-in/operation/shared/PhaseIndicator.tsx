@@ -1,49 +1,48 @@
 import React from 'react';
-import { Send, MessageCircle, GitBranch, Clock, CheckCircle } from 'lucide-react';
 
 interface PhaseIndicatorProps {
   phase: string;
   className?: string;
 }
 
+/**
+ * Phase Indicator Component
+ * 
+ * Displays the current phase of an execution with icon
+ */
 export function PhaseIndicator({ phase, className = '' }: PhaseIndicatorProps) {
-  const phaseConfig: Record<string, { icon: any; color: string; bgColor: string }> = {
-    'Blasting Phase': {
-      icon: Send,
-      color: 'text-blue-700',
-      bgColor: 'bg-blue-100',
+  const phaseConfig: Record<string, { label: string; color: string }> = {
+    invitation: {
+      label: 'Invitation',
+      color: 'text-blue-600 bg-blue-50',
     },
-    'Response Phase': {
-      icon: MessageCircle,
-      color: 'text-green-700',
-      bgColor: 'bg-green-100',
+    reminder: {
+      label: 'Reminder',
+      color: 'text-amber-600 bg-amber-50',
     },
-    'Processing Phase': {
-      icon: GitBranch,
-      color: 'text-purple-700',
-      bgColor: 'bg-purple-100',
+    thank_you: {
+      label: 'Thank You',
+      color: 'text-green-600 bg-green-50',
     },
-    'Follow-up Phase': {
-      icon: Clock,
-      color: 'text-orange-700',
-      bgColor: 'bg-orange-100',
-    },
-    'Completion': {
-      icon: CheckCircle,
-      color: 'text-green-700',
-      bgColor: 'bg-green-100',
+    follow_up: {
+      label: 'Follow Up',
+      color: 'text-purple-600 bg-purple-50',
     },
   };
 
-  const config = phaseConfig[phase] || phaseConfig['Processing Phase'];
-  const Icon = config.icon;
+  const config = phaseConfig[phase] || {
+    label: phase.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+    color: 'text-gray-600 bg-gray-50',
+  };
 
   return (
-    <div
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${config.bgColor} ${className}`}
+    <span
+      className={`
+        inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
+        ${config.color} ${className}
+      `}
     >
-      <Icon className={`h-4 w-4 ${config.color}`} />
-      <span className={`text-sm font-medium ${config.color}`}>{phase}</span>
-    </div>
+      {config.label}
+    </span>
   );
 }
