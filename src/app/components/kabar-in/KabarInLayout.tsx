@@ -12,6 +12,7 @@ import {
   ChevronRight,
   TrendingUp,
   Radio,
+  FileJson,
 } from "lucide-react";
 
 interface KabarInLayoutProps {
@@ -57,6 +58,12 @@ const menuItems: MenuItem[] = [
     label: "WhatsApp Flows",
     path: "/kabar-in/whatsapp-flows",
     color: "#25D366",
+  },
+  {
+    icon: FileJson,
+    label: "WA JSON Builder",
+    path: "/kabar-in/wa-json-builder",
+    color: "#128C7E",
   },
   {
     icon: Radio,
