@@ -6,6 +6,49 @@ interface FlowSimulatorProps {
     onClose: () => void;
 }
 
+// Simple markdown inline parser for simulator preview
+function parseSimulatorInline(text: string): (string | JSX.Element)[] {
+    const parts: (string | JSX.Element)[] = [];
+    let remaining = text;
+    let k = 0;
+    while (remaining.length > 0) {
+        const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+        const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
+        const strikeMatch = remaining.match(/~~(.+?)~~/);
+        const matches = [
+            boldMatch ? { type: "b", m: boldMatch, idx: boldMatch.index! } : null,
+            italicMatch ? { type: "i", m: italicMatch, idx: italicMatch.index! } : null,
+            strikeMatch ? { type: "s", m: strikeMatch, idx: strikeMatch.index! } : null,
+        ].filter(Boolean).sort((a, b) => a!.idx - b!.idx);
+        if (matches.length === 0) { parts.push(remaining); break; }
+        const f = matches[0]!;
+        if (f.idx > 0) parts.push(remaining.substring(0, f.idx));
+        k++;
+        if (f.type === "b") parts.push(<strong key={k}>{f.m![1]}</strong>);
+        else if (f.type === "i") parts.push(<em key={k}>{f.m![1]}</em>);
+        else if (f.type === "s") parts.push(<s key={k}>{f.m![1]}</s>);
+        remaining = remaining.substring(f.idx + f.m![0].length);
+    }
+    return parts;
+}
+
+function MarkdownText({ text }: { text: string }) {
+    if (!text) return null;
+    const lines = text.split("\n");
+    return (
+        <div>
+            {lines.map((line, i) => {
+                if (line.startsWith('### ')) return <div key={i} className="font-semibold">{parseSimulatorInline(line.slice(4))}</div>;
+                if (line.startsWith('## ')) return <div key={i} className="font-bold">{parseSimulatorInline(line.slice(3))}</div>;
+                if (line.startsWith('# ')) return <div key={i} className="font-bold text-lg">{parseSimulatorInline(line.slice(2))}</div>;
+                if (line.startsWith('- ') || line.startsWith('* ')) return <div key={i} className="flex gap-1"><span>&bull;</span><span>{parseSimulatorInline(line.slice(2))}</span></div>;
+                if (line.trim() === '') return <div key={i} className="h-2" />;
+                return <div key={i}>{parseSimulatorInline(line)}</div>;
+            })}
+        </div>
+    );
+}
+
 export function FlowSimulator({ onClose }: FlowSimulatorProps) {
     const { currentFlow } = useWhatsAppFlows();
     const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
@@ -40,15 +83,15 @@ export function FlowSimulator({ onClose }: FlowSimulatorProps) {
 
             case 'TextBody':
                 return (
-                    <div key={index} className="text-gray-700 mb-3">
-                        {component.text}
+                    <div key={index} className={`text-gray-700 mb-3 ${component['font-weight'] === 'bold' || component['font-weight'] === 'bold_italic' ? 'font-bold' : ''} ${component['font-weight'] === 'italic' || component['font-weight'] === 'bold_italic' ? 'italic' : ''} ${component.strikethrough ? 'line-through' : ''}`}>
+                        {component.markdown ? <MarkdownText text={component.text} /> : component.text}
                     </div>
                 );
 
             case 'TextCaption':
                 return (
-                    <div key={index} className="text-sm text-gray-600 mb-2">
-                        {component.text}
+                    <div key={index} className={`text-sm text-gray-600 mb-2 ${component['font-weight'] === 'bold' || component['font-weight'] === 'bold_italic' ? 'font-bold' : ''} ${component['font-weight'] === 'italic' || component['font-weight'] === 'bold_italic' ? 'italic' : ''} ${component.strikethrough ? 'line-through' : ''}`}>
+                        {component.markdown ? <MarkdownText text={component.text} /> : component.text}
                     </div>
                 );
 

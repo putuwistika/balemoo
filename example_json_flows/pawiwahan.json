@@ -1,0 +1,222 @@
+{
+  "version": "7.3",
+  "routing_model": {
+    "WELCOME": ["AGENDA"],
+    "AGENDA": ["ATTENDANCE"],
+    "ATTENDANCE": ["YES_SCREEN", "NO_SCREEN"],
+    "YES_SCREEN": ["CONTACT"],
+    "NO_SCREEN": ["THANK_YOU"],
+    "CONTACT": [],
+    "THANK_YOU": []
+  },
+  "screens": [
+    {
+      "id": "WELCOME",
+      "title": "Undangan Pawiwahan",
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextHeading", "text": "Om Swastyastu 🙏" },
+          {
+            "type": "TextBody",
+            "text": "Kami mengundang Anda untuk hadir dalam rangkaian upacara pawiwahan kami."
+          },
+          {
+            "type": "Footer",
+            "label": "Buka Undangan",
+            "on-click-action": {
+              "name": "navigate",
+              "next": { "name": "AGENDA", "type": "screen" },
+              "payload": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENDA",
+      "title": "Pilih Agenda",
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "agenda_form",
+            "children": [
+              {
+                "type": "CheckboxGroup",
+                "name": "agenda",
+                "label": "Agenda yang akan dihadiri",
+                "required": true,
+                "data-source": [
+                  { "id": "metatah", "title": "Metatah" },
+                  { "id": "pawiwahan", "title": "Pawiwahan" },
+                  { "id": "resepsi", "title": "Resepsi" }
+                ]
+              },
+              {
+                "type": "Footer",
+                "label": "Lanjut",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": { "name": "ATTENDANCE", "type": "screen" },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ATTENDANCE",
+      "title": "Konfirmasi Kehadiran",
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "NavigationList",
+            "name": "attendance_choice",
+            "list-items": [
+              {
+                "id": "yes",
+                "main-content": { "title": "Saya Akan Hadir" },
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": { "name": "YES_SCREEN", "type": "screen" },
+                  "payload": {}
+                }
+              },
+              {
+                "id": "no",
+                "main-content": { "title": "Maaf Tidak Bisa Hadir" },
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": { "name": "NO_SCREEN", "type": "screen" },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "YES_SCREEN",
+      "title": "Detail Kehadiran",
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "attendance_detail_form",
+            "children": [
+              {
+                "type": "TextInput",
+                "name": "guest_count",
+                "label": "Jumlah tamu",
+                "input-type": "number",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Lanjut",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": { "name": "CONTACT", "type": "screen" },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "NO_SCREEN",
+      "title": "Kirim Ucapan",
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "wishes_form",
+            "children": [
+              {
+                "type": "TextArea",
+                "name": "wishes",
+                "label": "Tulis pesan",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Kirim Ucapan",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": { "name": "THANK_YOU", "type": "screen" },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "CONTACT",
+      "title": "Data Tamu",
+      "terminal": true,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "contact_form",
+            "children": [
+              {
+                "type": "TextInput",
+                "name": "name",
+                "label": "Nama Lengkap",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Kirim RSVP",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "name": "${contact_form.name}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "THANK_YOU",
+      "title": "Terima Kasih",
+      "terminal": true,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextHeading", "text": "Terima Kasih 🙏" },
+          {
+            "type": "TextBody",
+            "text": "Pesan dan doa Anda akan kami sampaikan kepada mempelai. Semoga selalu diberkati."
+          },
+          {
+            "type": "Footer",
+            "label": "Tutup",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {}
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+

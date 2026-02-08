@@ -1,0 +1,328 @@
+{
+  "version": "7.3",
+  "routing_model": {
+    "WELCOME": [
+      "AGENDA"
+    ],
+    "AGENDA": [
+      "ATTENDANCE"
+    ],
+    "ATTENDANCE": [
+      "YES_SCREEN",
+      "NO_SCREEN",
+      "THANK_YOU",
+      "THANK_YOU_WISHES"
+    ],
+    "YES_SCREEN": [
+      "CONTACT"
+    ],
+    "NO_SCREEN": [
+      "THANK_YOU_WISHES"
+    ],
+    "CONTACT": [],
+    "THANK_YOU": [],
+    "THANK_YOU_WISHES": []
+  },
+  "screens": [
+    {
+      "id": "WELCOME",
+      "title": "Undangan Pawiwahan",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Om Swastyastu 🙏"
+          },
+          {
+            "type": "TextBody",
+            "text": "Kami mengundang Anda untuk hadir dalam rangkaian upacara pawiwahan kami."
+          },
+          {
+            "type": "Footer",
+            "label": "Buka Undangan",
+            "on-click-action": {
+              "name": "navigate",
+              "next": {
+                "name": "AGENDA",
+                "type": "screen"
+              },
+              "payload": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENDA",
+      "title": "Pilih Agenda",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "agenda_form",
+            "children": [
+              {
+                "type": "CheckboxGroup",
+                "name": "agenda",
+                "label": "Agenda yang akan dihadiri",
+                "required": true,
+                "data-source": [
+                  {
+                    "id": "metatah",
+                    "title": "Metatah"
+                  },
+                  {
+                    "id": "pawiwahan",
+                    "title": "Pawiwahan"
+                  },
+                  {
+                    "id": "resepsi",
+                    "title": "Resepsi"
+                  }
+                ]
+              },
+              {
+                "type": "Footer",
+                "label": "Lanjut",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {
+                    "name": "ATTENDANCE",
+                    "type": "screen"
+                  },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ATTENDANCE",
+      "title": "Konfirmasi Kehadiran",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "NavigationList",
+            "name": "attendance_choice",
+            "list-items": [
+              {
+                "id": "yes",
+                "main-content": {
+                  "title": "Saya Akan Hadir"
+                },
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {
+                    "name": "YES_SCREEN",
+                    "type": "screen"
+                  },
+                  "payload": {}
+                }
+              },
+              {
+                "id": "wishes",
+                "main-content": {
+                  "title": "Tidak Hadir, Kirim Ucapan"
+                },
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {
+                    "name": "NO_SCREEN",
+                    "type": "screen"
+                  },
+                  "payload": {}
+                }
+              },
+              {
+                "id": "not_all",
+                "main-content": {
+                  "title": "Tidak Hadir di Semua Acara"
+                },
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {
+                    "name": "THANK_YOU",
+                    "type": "screen"
+                  },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "YES_SCREEN",
+      "title": "Detail Kehadiran",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "attendance_detail_form",
+            "children": [
+              {
+                "type": "TextInput",
+                "name": "guest_count",
+                "label": "Jumlah tamu yang hadir",
+                "input-type": "number",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Lanjut",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {
+                    "name": "CONTACT",
+                    "type": "screen"
+                  },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "NO_SCREEN",
+      "title": "Kirim Ucapan",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "wishes_form",
+            "children": [
+              {
+                "type": "TextArea",
+                "name": "wishes",
+                "label": "Tulis pesan atau doa untuk mempelai",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Kirim Ucapan",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {
+                    "name": "THANK_YOU_WISHES",
+                    "type": "screen"
+                  },
+                  "payload": {}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "CONTACT",
+      "title": "Data Tamu",
+      "terminal": true,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "contact_form",
+            "children": [
+              {
+                "type": "TextInput",
+                "name": "name",
+                "label": "Nama Lengkap",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Kirim RSVP",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "attendance": "yes",
+                    "agenda": "${screen.AGENDA.form.agenda}",
+                    "guest_count": "${screen.YES_SCREEN.form.guest_count}",
+                    "name": "${form.name}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "THANK_YOU",
+      "title": "Terima Kasih",
+      "terminal": true,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Terima Kasih 🙏"
+          },
+          {
+            "type": "TextBody",
+            "text": "Terima kasih atas konfirmasi Anda."
+          },
+          {
+            "type": "Footer",
+            "label": "Tutup",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "attendance": "not_attending_all",
+                "agenda": "${screen.AGENDA.form.agenda}",
+                "wishes": ""
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "THANK_YOU_WISHES",
+      "title": "Terima Kasih",
+      "terminal": true,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Terima Kasih 🙏"
+          },
+          {
+            "type": "TextBody",
+            "text": "Terima kasih atas doa dan ucapan Anda."
+          },
+          {
+            "type": "Footer",
+            "label": "Tutup",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "attendance": "wishes_only",
+                "agenda": "${screen.AGENDA.form.agenda}",
+                "wishes": "${screen.NO_SCREEN.form.wishes}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
