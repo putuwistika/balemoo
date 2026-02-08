@@ -2835,6 +2835,9 @@ function PropertiesEditor({
         if (field.type === "text") {
           const isNameField = field.key === "name";
           const isPatternField = field.key === "pattern" && component.type === "TextInput";
+          const isLabelField = field.key === "label";
+          const labelValue = isLabelField ? (component[field.key] || "") : "";
+          const labelTooLong = isLabelField && (component.type === "TextInput" || component.type === "TextArea") && labelValue.length > 20;
           const nameValue = isNameField ? (component[field.key] || "") : "";
           const hasInvalidName = isNameField && nameValue && INVALID_NAME_RE.test(nameValue);
           const patternValue = isPatternField ? (component[field.key] || "") : "";
@@ -2846,6 +2849,16 @@ function PropertiesEditor({
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
                 <label style={{ fontSize: "12px", fontWeight: 500, color: "#6b7280" }}>
                   {field.label}
+                  {isLabelField && (component.type === "TextInput" || component.type === "TextArea") && (
+                    <span style={{
+                      marginLeft: "6px",
+                      fontSize: "10px",
+                      color: labelTooLong ? "#ef4444" : "#9ca3af",
+                      fontWeight: labelTooLong ? 600 : 400
+                    }}>
+                      ({labelValue.length}/20)
+                    </span>
+                  )}
                 </label>
                 {canBeDynamic && dataEntries.length > 0 && (
                   <DataRefPicker
@@ -2869,6 +2882,10 @@ function PropertiesEditor({
                   onChange={(e) => {
                     if (isNameField) {
                       updateField(field.key, e.target.value.replace(/\s/g, "_"));
+                    } else if (isLabelField && (component.type === "TextInput" || component.type === "TextArea")) {
+                      // Limit to 20 characters for TextInput and TextArea labels
+                      const newValue = e.target.value.slice(0, 20);
+                      updateField(field.key, newValue);
                     } else {
                       updateField(field.key, e.target.value);
                     }
@@ -2882,7 +2899,7 @@ function PropertiesEditor({
                   style={{
                     width: "100%",
                     padding: "8px 10px",
-                    border: `1px solid ${hasInvalidName || patternMissingHelper ? "#ef4444" : "#e5e7eb"}`,
+                    border: `1px solid ${hasInvalidName || patternMissingHelper || labelTooLong ? "#ef4444" : "#e5e7eb"}`,
                     borderRadius: "6px",
                     fontSize: "13px",
                     outline: "none",
@@ -2893,6 +2910,11 @@ function PropertiesEditor({
               {hasInvalidName && (
                 <div style={{ fontSize: "11px", color: "#ef4444", marginTop: "3px" }}>
                   Gunakan huruf, angka, _ atau - saja (tanpa spasi)
+                </div>
+              )}
+              {labelTooLong && (
+                <div style={{ fontSize: "11px", color: "#ef4444", marginTop: "3px" }}>
+                  ⚠️ Label terlalu panjang! Meta membatasi label maksimal 20 karakter untuk menghindari truncation.
                 </div>
               )}
               {isNameField && !hasInvalidName && nameValue && (
@@ -3728,6 +3750,13 @@ export function WAJsonBuilder() {
       const footerCount = s.layout.children.filter((c) => c.type === "Footer").length;
       if (footerCount > 1) errors.push(`Screen "${s.id}" has ${footerCount} Footers (max 1 allowed)`);
       if (footerCount === 0 && !hasNavList) errors.push(`Screen "${s.id}" must have a Footer component`);
+
+      // Check TextInput and TextArea label length (Meta requirement: max 20 chars)
+      s.layout.children.forEach((c) => {
+        if ((c.type === "TextInput" || c.type === "TextArea") && c.label && c.label.length > 20) {
+          errors.push(`Screen "${s.id}" → ${c.type} "${c.name || 'unnamed'}" label is ${c.label.length} characters (max 20). Shorten to avoid truncation.`);
+        }
+      });
 
       // RichText restriction: can only be alone or with Footer
       const hasRichText = s.layout.children.some((c) => c.type === "RichText");
